@@ -1,9 +1,64 @@
+// Box2D for sysl — 2D rigid body physics, bound to https://github.com/erincatto/box2d.
+//
+// There is no `dependencies` block because Box2D depends on nothing: it is C17 with no external
+// libraries, and its source is carried in this package. Box2D is not in Homebrew and there is no
+// system copy on a microcontroller, so vendoring is forced rather than chosen — and it is what
+// `qcbor`, `plutovg`, `qoi` and `termbox2` already do.
+//
+// **The version is pinned to the v3.1.1 tag rather than to `main`.** `main` carries a
+// `BOX2D_DOUBLE_PRECISION` mode that changes `b2Vec2`'s layout, which is `termbox2`'s
+// `TB_OPT_ATTR_W` case exactly: an option that reaches a declaration. If it is ever wanted it goes
+// in a vendored `c/options.h` that both the `.c` build and the `@include` name, rather than being
+// left to whatever the consumer's preprocessor happened to have.
+//
+// This is the block a *consumer* writes to reach this package, and resolution for it is built
+// (`design/packages.md` §§ 3-6): a `sysl build` fetches the coordinate, selects by MVS, checks what
+// arrived against `sysl.sum`, and compiles it as more modules.
+//
+//     dependencies {
+//       box2d { git = "github.com/sysl-lang/box2d", version = "0.1.0" }
+//     }
+//
+// The coordinate is identity rather than a URL, so it carries no `https://`, and the version is the
+// tag `v0.1.0` on this repository.
+
 package {
   name    = "box2d"
   version = "0.1.0"
 }
 
+// **There is no shim.c, and that is the headline fact about this binding.**
+//
+// Every one of Box2D's 466 `B2_API` entry points takes scalars, pointers, or structs by value —
+// and since 0.0.55 sysl can spell all three, in both directions, including a function pointer whose
+// parameters are aggregates. So the `.c` files in `sh/sysl/box2d/c/` are Box2D's own, unedited, and
+// this package adds no C at all.
+//
+// The seventy-nine `static inline` math functions are the one thing that would ordinarily need
+// wrapping, since an inline function has no symbol to link (`15 §7`). They are written in sysl
+// instead, in `sh.sysl.box2d.math`, where they become operators rather than calls.
+
 requires {
   heap  = true
   posix = true
 }
+
+// **`heap` is honest and not currently avoidable.** Box2D allocates its worlds, its body and shape
+// pools, its broad-phase trees and its solver's arenas. `b2SetAllocator` does exist and would let a
+// caller point all of it at storage of its own, the way `qoi`'s `QOI_MALLOC` was redirected to get
+// `requires {}` out of an allocating API — but Box2D's allocations are long-lived and of many sizes
+// rather than one arena-shaped request, so it is a real allocator that would have to be supplied
+// and not a bump pointer. That is worth a card rather than a note, and it does not block the desktop
+// use this package has today.
+//
+// **`posix` is narrower than it looks.** The simulation itself touches no operating system: it is
+// arithmetic over memory. What reaches POSIX is `timer.c`, which reads a monotonic clock for the
+// per-step profile, and `b2World_DumpMemoryStats`, which writes a file. A capability is a property
+// of the module rather than of the call (`capabilities.md`), so it is declared here because those
+// two are part of the package, and not because an ordinary `step` needs it.
+
+// **What is NOT here is a `requires { headers }` key**, and the absence is the other half of
+// vendoring: the constants and every struct layout this binding uses are read out of `box2d/`'s own
+// headers by the C compiler, and those headers are carried here beside the C they belong to. Unlike
+// `cairo` or the SDL3 packages there is no directory for a consumer to be told about and no
+// `--include-path` to forget.
