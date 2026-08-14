@@ -73,6 +73,7 @@ import sh.sysl.box2d.math.{Vec2, Rot, Transform, AABB, Plane, CosSin, zero, iden
 // at all.
 import sysl.slices.as_mut_ptr
 import sysl.text.{cstring, from_cstring}
+import sysl.buf.{Buf, buf}
 
 // ## The enumerations
 //
@@ -320,6 +321,86 @@ struct World
     // Rebuild the static broad-phase tree. Worth calling once after building a level and never in a
     // frame — it is a full rebuild rather than an incremental update.
     rebuild_static_tree(&self) = c.world_rebuild_static_tree(self.id)
+
+    // Every shape whose bounding box overlaps `box`.
+    //
+    // **This is a broad-phase question and answers in bounding boxes**, so a shape whose box
+    // overlaps but whose geometry does not is still reported. `overlap_shape` asks the exact
+    // question and costs more.
+    overlap_aabb(&self, box: AABB, filter: c.QueryFilter = c.default_query_filter()) -> []Shape
+        var found: Buf[c.ShapeId] = buf()
+
+        c.world_overlap_aabb(self.id, box, filter, &collect_shape, ptr_cast(&found))
+
+        var out: []Shape = [Shape(self, c.ShapeId(0, 0, 0)); found.len()]
+
+        for i in 0..<found.len() do out[i] = Shape(self, found[i])
+
+        out
+    end overlap_aabb
+
+    // The same, with the caller's own visitor. Returning false from it stops the query.
+    overlap_aabb_with(&self, box: AABB, visit: *extern(c.ShapeId, *u8) -> bool, context: *u8,
+                      filter: c.QueryFilter = c.default_query_filter()) =
+        c.world_overlap_aabb(self.id, box, filter, visit, context)
+
+    // Everything a ray from `origin` along `translation` passes through, in the order Box2D found
+    // them, which is **not** sorted by distance.
+    cast_ray(&self, origin: Vec2, translation: Vec2,
+             filter: c.QueryFilter = c.default_query_filter()) -> []RayHit
+        var into = CastCollector(buf(), buf(), buf(), buf())
+
+        c.world_cast_ray(self.id, origin, translation, filter, &collect_cast, ptr_cast(&into))
+
+        val n = into.hits.len()
+        var out: []RayHit = [RayHit(Shape(self, c.ShapeId(0, 0, 0)), zero(), zero(), 0.0); n]
+
+        for i in 0..<n
+            out[i] = RayHit(Shape(self, into.hits[i]), into.points[i], into.normals[i], into.fractions[i])
+
+        out
+    end cast_ray
+
+    // The first thing the ray hits, or `None`. This is the one a line of sight or a bullet wants,
+    // and it is Box2D's own `b2World_CastRayClosest` rather than a sort of `cast_ray`'s answer.
+    cast_ray_closest(&self, origin: Vec2, translation: Vec2,
+                     filter: c.QueryFilter = c.default_query_filter()) -> Option[RayHit]
+        val r = c.world_cast_ray_closest(self.id, origin, translation, filter)
+
+        if r.hit then Some(RayHit(Shape(self, r.shape_id), r.point, r.normal, r.fraction)) else None
+    end cast_ray_closest
+
+    // The same, with the caller's own visitor. What it returns decides what happens next: `-1` skips
+    // this shape and carries on, `0` stops the cast, a fraction clips the ray to that point, and `1`
+    // keeps the ray at full length. Clipping is what makes a closest-hit search cheap.
+    cast_ray_with(&self, origin: Vec2, translation: Vec2,
+                  visit: *extern(c.ShapeId, Vec2, Vec2, f32, *u8) -> f32, context: *u8,
+                  filter: c.QueryFilter = c.default_query_filter()) =
+        c.world_cast_ray(self.id, origin, translation, filter, visit, context)
+
+    // ## The two solver callbacks
+    //
+    // Both are called from a worker thread while the world is stepping, so neither may touch the
+    // world — Box2D says so and this package cannot enforce it. Each takes an `@export`ed function.
+
+    // Decide, per pair, whether two shapes collide. Called only for pairs where at least one shape
+    // has custom filtering enabled, and only for awake dynamic bodies.
+    set_custom_filter(&self, fcn: *extern(c.ShapeId, c.ShapeId, *u8) -> bool, context: *u8) =
+        c.world_set_custom_filter_callback(self.id, fcn, context)
+
+    // Inspect a contact after it is updated and before it is solved, and return false to switch it
+    // off for this step. One-way platforms are built from this.
+    set_pre_solve(&self, fcn: *extern(c.ShapeId, c.ShapeId, *c.Manifold, *u8) -> bool, context: *u8) =
+        c.world_set_pre_solve_callback(self.id, fcn, context)
+
+    // How two shapes' frictions combine. The default is `sqrt(a * b)`; a game wanting ice that stays
+    // slippery whatever it touches replaces it with `min`.
+    set_friction_mixer(&self, fcn: *extern(f32, i32, f32, i32) -> f32) =
+        c.world_set_friction_callback(self.id, fcn)
+
+    // How two shapes' restitutions combine. The default is `max`.
+    set_restitution_mixer(&self, fcn: *extern(f32, i32, f32, i32) -> f32) =
+        c.world_set_restitution_callback(self.id, fcn)
 end World
 
 impl Drop for World

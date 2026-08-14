@@ -1,0 +1,442 @@
+// Joints — the eight constraints that tie two bodies together.
+//
+// ## One id, eight types, and what this package does about it
+//
+// Box2D has a single `b2JointId` for all eight kinds, and an accessor for the wrong kind traps: ask
+// a weld joint for its motor speed and the program stops. Here each kind is **its own type**, so a
+// `RevoluteJoint` has `motor_torque` and a `WeldJoint` does not, and the mistake is a compile error
+// rather than a trap. Each wraps a `Joint`, which carries what all eight have in common and is
+// reached as the `joint` field:
+//
+//     val hinge = revolute_joint(arm, body, anchor = Vec2(0.0, 2.0), enable_motor = true,
+//                                motor_speed = 3.0, max_motor_torque = 50.0)
+//
+//     hinge.motor_torque()          // a revolute joint's
+//     hinge.joint.wake_bodies()     // any joint's
+//
+// ## An anchor is a world point
+//
+// Box2D's definitions take an anchor in each body's *own* frame, which means a caller that knows
+// where the hinge is has to convert twice before it can say so. Every constructor here takes the
+// anchor as a **world** point and does both conversions, which is what Box2D v2's `Initialize`
+// helpers did and v3 dropped. Bodies must already be at their starting positions when a joint is
+// made, which they are: `body_def` takes a position for exactly this reason.
+//
+// ## Nothing here has a destructor
+//
+// A joint goes when its world goes, like a body and a shape, and for the same reason. `remove()` on
+// the inner `Joint` takes one out early.
+
+module sh.sysl.box2d
+
+import sh.sysl.box2d.c
+import sh.sysl.box2d.math.{Vec2, Rot, zero, identity}
+
+// What every joint has, whichever of the eight it is.
+struct Joint
+    world: &World
+    id: c.JointId
+
+    kind(self) -> JointKind = JointKind.of(c.joint_get_type(self.id))
+    body_a(self) -> Body = Body(self.world, c.joint_get_body_a(self.id))
+    body_b(self) -> Body = Body(self.world, c.joint_get_body_b(self.id))
+
+    // Whether the two bodies this joint holds may also collide with each other. Usually they should
+    // not — a hinge whose halves collide fights itself.
+    collide_connected(self) -> bool = c.joint_get_collide_connected(self.id)
+    set_collide_connected(self, flag: bool) = c.joint_set_collide_connected(self.id, flag)
+
+    // The force and torque the constraint applied over the last step. What a breakable joint is
+    // built from: watch these, and `remove()` when they pass a threshold.
+    constraint_force(self) -> Vec2 = c.joint_get_constraint_force(self.id)
+    constraint_torque(self) -> f32 = c.joint_get_constraint_torque(self.id)
+
+    // How far the constraint is currently from being satisfied. Zero for a joint the solver has
+    // caught up with.
+    linear_separation(self) -> f32 = c.joint_get_linear_separation(self.id)
+    angular_separation(self) -> f32 = c.joint_get_angular_separation(self.id)
+
+    // How hard the solver pushes to close that separation. Zero hertz means as hard as it can.
+    set_tuning(self, hertz: f32, damping_ratio: f32) =
+        c.joint_set_constraint_tuning(self.id, hertz, damping_ratio)
+
+    local_anchor_a(self) -> Vec2 = c.joint_get_local_anchor_a(self.id)
+    local_anchor_b(self) -> Vec2 = c.joint_get_local_anchor_b(self.id)
+
+    // Wake both bodies. A joint whose motor has just been switched on needs this if the bodies had
+    // gone to sleep, since nothing else about the joint disturbs them.
+    wake_bodies(self) = c.joint_wake_bodies(self.id)
+
+    is_valid(self) -> bool = c.joint_is_valid(self.id)
+    remove(self) = c.destroy_joint(self.id)
+end Joint
+
+impl Eq for Joint
+    eq(self, rhs: Joint) -> bool =
+        self.id.index1 == rhs.id.index1 && self.id.world0 == rhs.id.world0 &&
+        self.id.generation == rhs.id.generation
+end Joint
+
+impl Display for Joint
+    display(self, out: *Writer, fmt: FormatSpec) =
+        display_str(str(self.kind()) + " joint " + str(self.id.index1), out, fmt)
+end Joint
+
+// ## Revolute — a hinge
+//
+// Two bodies share a point and are free to rotate about it. A limit stops the rotation at an angle;
+// a motor drives it. This is a door, a wheel's axle, a ragdoll's elbow.
+
+struct RevoluteJoint
+    joint: Joint
+
+    // The current angle between the bodies, measured from the reference angle they had when the
+    // joint was made.
+    angle(self) -> f32 = c.revolute_joint_get_angle(self.joint.id)
+
+    limit_enabled(self) -> bool = c.revolute_joint_is_limit_enabled(self.joint.id)
+    enable_limit(self, flag: bool) = c.revolute_joint_enable_limit(self.joint.id, flag)
+    set_limits(self, lower: f32, upper: f32) = c.revolute_joint_set_limits(self.joint.id, lower, upper)
+    lower_limit(self) -> f32 = c.revolute_joint_get_lower_limit(self.joint.id)
+    upper_limit(self) -> f32 = c.revolute_joint_get_upper_limit(self.joint.id)
+
+    motor_enabled(self) -> bool = c.revolute_joint_is_motor_enabled(self.joint.id)
+    enable_motor(self, flag: bool) = c.revolute_joint_enable_motor(self.joint.id, flag)
+    motor_speed(self) -> f32 = c.revolute_joint_get_motor_speed(self.joint.id)
+    set_motor_speed(self, speed: f32) = c.revolute_joint_set_motor_speed(self.joint.id, speed)
+    max_motor_torque(self) -> f32 = c.revolute_joint_get_max_motor_torque(self.joint.id)
+    set_max_motor_torque(self, torque: f32) = c.revolute_joint_set_max_motor_torque(self.joint.id, torque)
+
+    // What the motor actually applied over the last step, which is capped by `max_motor_torque`.
+    motor_torque(self) -> f32 = c.revolute_joint_get_motor_torque(self.joint.id)
+
+    spring_enabled(self) -> bool = c.revolute_joint_is_spring_enabled(self.joint.id)
+    enable_spring(self, flag: bool) = c.revolute_joint_enable_spring(self.joint.id, flag)
+    set_spring(self, hertz: f32, damping_ratio: f32)
+        c.revolute_joint_set_spring_hertz(self.joint.id, hertz)
+        c.revolute_joint_set_spring_damping_ratio(self.joint.id, damping_ratio)
+    end set_spring
+    set_target_angle(self, angle: f32) = c.revolute_joint_set_target_angle(self.joint.id, angle)
+end RevoluteJoint
+
+revolute_joint(a: Body, b: Body, anchor: Vec2, enable_limit: bool = false, lower_angle: f32 = 0.0,
+               upper_angle: f32 = 0.0, enable_motor: bool = false, motor_speed: f32 = 0.0,
+               max_motor_torque: f32 = 0.0, enable_spring: bool = false, hertz: f32 = 0.0,
+               damping_ratio: f32 = 0.0, collide_connected: bool = false) -> RevoluteJoint
+    var d = c.default_revolute_joint_def()
+
+    d.body_id_a = a.id
+    d.body_id_b = b.id
+    d.local_anchor_a = a.local_point(anchor)
+    d.local_anchor_b = b.local_point(anchor)
+    d.enable_limit = enable_limit
+    d.lower_angle = lower_angle
+    d.upper_angle = upper_angle
+    d.enable_motor = enable_motor
+    d.motor_speed = motor_speed
+    d.max_motor_torque = max_motor_torque
+    d.enable_spring = enable_spring
+    d.hertz = hertz
+    d.damping_ratio = damping_ratio
+    d.collide_connected = collide_connected
+
+    RevoluteJoint(Joint(a.world, c.create_revolute_joint(a.world.id, &d)))
+end revolute_joint
+
+// ## Distance — a rod or a spring
+//
+// The two anchors are held a fixed distance apart. With `enable_spring` it becomes a
+// spring-and-damper instead, and with a limit it is a rope that can go slack but not stretch.
+
+struct DistanceJoint
+    joint: Joint
+
+    length(self) -> f32 = c.distance_joint_get_length(self.joint.id)
+    set_length(self, length: f32) = c.distance_joint_set_length(self.joint.id, length)
+
+    // What the anchors are actually apart right now, which differs from `length` whenever the joint
+    // is a spring or is being pulled.
+    current_length(self) -> f32 = c.distance_joint_get_current_length(self.joint.id)
+
+    spring_enabled(self) -> bool = c.distance_joint_is_spring_enabled(self.joint.id)
+    enable_spring(self, flag: bool) = c.distance_joint_enable_spring(self.joint.id, flag)
+    set_spring(self, hertz: f32, damping_ratio: f32)
+        c.distance_joint_set_spring_hertz(self.joint.id, hertz)
+        c.distance_joint_set_spring_damping_ratio(self.joint.id, damping_ratio)
+    end set_spring
+
+    limit_enabled(self) -> bool = c.distance_joint_is_limit_enabled(self.joint.id)
+    enable_limit(self, flag: bool) = c.distance_joint_enable_limit(self.joint.id, flag)
+    set_length_range(self, min_length: f32, max_length: f32) =
+        c.distance_joint_set_length_range(self.joint.id, min_length, max_length)
+    min_length(self) -> f32 = c.distance_joint_get_min_length(self.joint.id)
+    max_length(self) -> f32 = c.distance_joint_get_max_length(self.joint.id)
+
+    motor_enabled(self) -> bool = c.distance_joint_is_motor_enabled(self.joint.id)
+    enable_motor(self, flag: bool) = c.distance_joint_enable_motor(self.joint.id, flag)
+    set_motor_speed(self, speed: f32) = c.distance_joint_set_motor_speed(self.joint.id, speed)
+    set_max_motor_force(self, force: f32) = c.distance_joint_set_max_motor_force(self.joint.id, force)
+    motor_force(self) -> f32 = c.distance_joint_get_motor_force(self.joint.id)
+end DistanceJoint
+
+// **`length` defaults to the distance the two anchors are already apart**, which is what a caller
+// almost always means and what Box2D makes them compute. Pass a length to override it.
+distance_joint(a: Body, b: Body, anchor_a: Vec2, anchor_b: Vec2, length: f32 = -1.0,
+               enable_spring: bool = false, hertz: f32 = 0.0, damping_ratio: f32 = 0.0,
+               enable_limit: bool = false, min_length: f32 = 0.0, max_length: f32 = 1.0e10,
+               collide_connected: bool = false) -> DistanceJoint
+    var d = c.default_distance_joint_def()
+
+    d.body_id_a = a.id
+    d.body_id_b = b.id
+    d.local_anchor_a = a.local_point(anchor_a)
+    d.local_anchor_b = b.local_point(anchor_b)
+    d.length = if length < 0.0 then anchor_a.distance(anchor_b) else length
+    d.enable_spring = enable_spring
+    d.hertz = hertz
+    d.damping_ratio = damping_ratio
+    d.enable_limit = enable_limit
+    d.min_length = min_length
+    d.max_length = max_length
+    d.collide_connected = collide_connected
+
+    DistanceJoint(Joint(a.world, c.create_distance_joint(a.world.id, &d)))
+end distance_joint
+
+// ## Prismatic — a slider
+//
+// The bodies may slide along one axis and may not rotate relative to each other. A piston, a lift,
+// a sliding door.
+
+struct PrismaticJoint
+    joint: Joint
+
+    translation(self) -> f32 = c.prismatic_joint_get_translation(self.joint.id)
+    speed(self) -> f32 = c.prismatic_joint_get_speed(self.joint.id)
+
+    limit_enabled(self) -> bool = c.prismatic_joint_is_limit_enabled(self.joint.id)
+    enable_limit(self, flag: bool) = c.prismatic_joint_enable_limit(self.joint.id, flag)
+    set_limits(self, lower: f32, upper: f32) = c.prismatic_joint_set_limits(self.joint.id, lower, upper)
+    lower_limit(self) -> f32 = c.prismatic_joint_get_lower_limit(self.joint.id)
+    upper_limit(self) -> f32 = c.prismatic_joint_get_upper_limit(self.joint.id)
+
+    motor_enabled(self) -> bool = c.prismatic_joint_is_motor_enabled(self.joint.id)
+    enable_motor(self, flag: bool) = c.prismatic_joint_enable_motor(self.joint.id, flag)
+    set_motor_speed(self, speed: f32) = c.prismatic_joint_set_motor_speed(self.joint.id, speed)
+    set_max_motor_force(self, force: f32) = c.prismatic_joint_set_max_motor_force(self.joint.id, force)
+    motor_force(self) -> f32 = c.prismatic_joint_get_motor_force(self.joint.id)
+
+    spring_enabled(self) -> bool = c.prismatic_joint_is_spring_enabled(self.joint.id)
+    enable_spring(self, flag: bool) = c.prismatic_joint_enable_spring(self.joint.id, flag)
+    set_spring(self, hertz: f32, damping_ratio: f32)
+        c.prismatic_joint_set_spring_hertz(self.joint.id, hertz)
+        c.prismatic_joint_set_spring_damping_ratio(self.joint.id, damping_ratio)
+    end set_spring
+end PrismaticJoint
+
+// `axis` is the direction of travel, in world coordinates. It is normalized here rather than
+// requiring the caller to do it, since an unnormalized axis is a silent scaling of every limit and
+// every speed on the joint.
+prismatic_joint(a: Body, b: Body, anchor: Vec2, axis: Vec2, enable_limit: bool = false,
+                lower_translation: f32 = 0.0, upper_translation: f32 = 0.0, enable_motor: bool = false,
+                motor_speed: f32 = 0.0, max_motor_force: f32 = 0.0, enable_spring: bool = false,
+                hertz: f32 = 0.0, damping_ratio: f32 = 0.0,
+                collide_connected: bool = false) -> PrismaticJoint
+    var d = c.default_prismatic_joint_def()
+
+    d.body_id_a = a.id
+    d.body_id_b = b.id
+    d.local_anchor_a = a.local_point(anchor)
+    d.local_anchor_b = b.local_point(anchor)
+    d.local_axis_a = a.local_vector(axis.normalize())
+    d.enable_limit = enable_limit
+    d.lower_translation = lower_translation
+    d.upper_translation = upper_translation
+    d.enable_motor = enable_motor
+    d.motor_speed = motor_speed
+    d.max_motor_force = max_motor_force
+    d.enable_spring = enable_spring
+    d.hertz = hertz
+    d.damping_ratio = damping_ratio
+    d.collide_connected = collide_connected
+
+    PrismaticJoint(Joint(a.world, c.create_prismatic_joint(a.world.id, &d)))
+end prismatic_joint
+
+// ## Wheel — a suspension
+//
+// A prismatic joint along a suspension axis with a spring on it, and free rotation about the
+// anchor. One of these plus a motor is a car wheel.
+
+struct WheelJoint
+    joint: Joint
+
+    limit_enabled(self) -> bool = c.wheel_joint_is_limit_enabled(self.joint.id)
+    enable_limit(self, flag: bool) = c.wheel_joint_enable_limit(self.joint.id, flag)
+    set_limits(self, lower: f32, upper: f32) = c.wheel_joint_set_limits(self.joint.id, lower, upper)
+
+    motor_enabled(self) -> bool = c.wheel_joint_is_motor_enabled(self.joint.id)
+    enable_motor(self, flag: bool) = c.wheel_joint_enable_motor(self.joint.id, flag)
+    set_motor_speed(self, speed: f32) = c.wheel_joint_set_motor_speed(self.joint.id, speed)
+    set_max_motor_torque(self, torque: f32) = c.wheel_joint_set_max_motor_torque(self.joint.id, torque)
+    motor_torque(self) -> f32 = c.wheel_joint_get_motor_torque(self.joint.id)
+
+    spring_enabled(self) -> bool = c.wheel_joint_is_spring_enabled(self.joint.id)
+    enable_spring(self, flag: bool) = c.wheel_joint_enable_spring(self.joint.id, flag)
+    set_spring(self, hertz: f32, damping_ratio: f32)
+        c.wheel_joint_set_spring_hertz(self.joint.id, hertz)
+        c.wheel_joint_set_spring_damping_ratio(self.joint.id, damping_ratio)
+    end set_spring
+end WheelJoint
+
+wheel_joint(a: Body, b: Body, anchor: Vec2, axis: Vec2, enable_spring: bool = true, hertz: f32 = 4.0,
+            damping_ratio: f32 = 0.7, enable_limit: bool = false, lower_translation: f32 = 0.0,
+            upper_translation: f32 = 0.0, enable_motor: bool = false, motor_speed: f32 = 0.0,
+            max_motor_torque: f32 = 0.0, collide_connected: bool = false) -> WheelJoint
+    var d = c.default_wheel_joint_def()
+
+    d.body_id_a = a.id
+    d.body_id_b = b.id
+    d.local_anchor_a = a.local_point(anchor)
+    d.local_anchor_b = b.local_point(anchor)
+    d.local_axis_a = a.local_vector(axis.normalize())
+    d.enable_spring = enable_spring
+    d.hertz = hertz
+    d.damping_ratio = damping_ratio
+    d.enable_limit = enable_limit
+    d.lower_translation = lower_translation
+    d.upper_translation = upper_translation
+    d.enable_motor = enable_motor
+    d.motor_speed = motor_speed
+    d.max_motor_torque = max_motor_torque
+    d.collide_connected = collide_connected
+
+    WheelJoint(Joint(a.world, c.create_wheel_joint(a.world.id, &d)))
+end wheel_joint
+
+// ## Weld — a rigid connection that can be made soft
+//
+// Both bodies are held at a fixed relative position and angle. With a hertz above zero it becomes a
+// soft connection instead, which is how a deformable body is approximated. Box2D warns that its
+// solver cannot hold many bodies together rigidly, so a long chain of welds will sag.
+
+struct WeldJoint
+    joint: Joint
+
+    linear_hertz(self) -> f32 = c.weld_joint_get_linear_hertz(self.joint.id)
+    angular_hertz(self) -> f32 = c.weld_joint_get_angular_hertz(self.joint.id)
+    set_linear_spring(self, hertz: f32, damping_ratio: f32)
+        c.weld_joint_set_linear_hertz(self.joint.id, hertz)
+        c.weld_joint_set_linear_damping_ratio(self.joint.id, damping_ratio)
+    end set_linear_spring
+    set_angular_spring(self, hertz: f32, damping_ratio: f32)
+        c.weld_joint_set_angular_hertz(self.joint.id, hertz)
+        c.weld_joint_set_angular_damping_ratio(self.joint.id, damping_ratio)
+    end set_angular_spring
+end WeldJoint
+
+// Zero hertz is as rigid as the solver can be, which is the default and what "weld" means.
+weld_joint(a: Body, b: Body, anchor: Vec2, linear_hertz: f32 = 0.0, angular_hertz: f32 = 0.0,
+           linear_damping_ratio: f32 = 1.0, angular_damping_ratio: f32 = 1.0,
+           collide_connected: bool = false) -> WeldJoint
+    var d = c.default_weld_joint_def()
+
+    d.body_id_a = a.id
+    d.body_id_b = b.id
+    d.local_anchor_a = a.local_point(anchor)
+    d.local_anchor_b = b.local_point(anchor)
+    d.linear_hertz = linear_hertz
+    d.angular_hertz = angular_hertz
+    d.linear_damping_ratio = linear_damping_ratio
+    d.angular_damping_ratio = angular_damping_ratio
+    d.collide_connected = collide_connected
+
+    WeldJoint(Joint(a.world, c.create_weld_joint(a.world.id, &d)))
+end weld_joint
+
+// ## Motor — drive one body relative to another
+//
+// Rather than constraining a position, this drives towards one with a capped force. It is how a
+// character is moved without fighting the solver: set an offset each frame and let the joint chase
+// it.
+
+struct MotorJoint
+    joint: Joint
+
+    linear_offset(self) -> Vec2 = c.motor_joint_get_linear_offset(self.joint.id)
+    set_linear_offset(self, offset: Vec2) = c.motor_joint_set_linear_offset(self.joint.id, offset)
+    angular_offset(self) -> f32 = c.motor_joint_get_angular_offset(self.joint.id)
+    set_angular_offset(self, offset: f32) = c.motor_joint_set_angular_offset(self.joint.id, offset)
+    max_force(self) -> f32 = c.motor_joint_get_max_force(self.joint.id)
+    set_max_force(self, force: f32) = c.motor_joint_set_max_force(self.joint.id, force)
+    max_torque(self) -> f32 = c.motor_joint_get_max_torque(self.joint.id)
+    set_max_torque(self, torque: f32) = c.motor_joint_set_max_torque(self.joint.id, torque)
+    set_correction_factor(self, factor: f32) = c.motor_joint_set_correction_factor(self.joint.id, factor)
+end MotorJoint
+
+motor_joint(a: Body, b: Body, linear_offset: Vec2 = zero(), angular_offset: f32 = 0.0,
+            max_force: f32 = 1.0, max_torque: f32 = 1.0, correction_factor: f32 = 0.3,
+            collide_connected: bool = false) -> MotorJoint
+    var d = c.default_motor_joint_def()
+
+    d.body_id_a = a.id
+    d.body_id_b = b.id
+    d.linear_offset = linear_offset
+    d.angular_offset = angular_offset
+    d.max_force = max_force
+    d.max_torque = max_torque
+    d.correction_factor = correction_factor
+    d.collide_connected = collide_connected
+
+    MotorJoint(Joint(a.world, c.create_motor_joint(a.world.id, &d)))
+end motor_joint
+
+// ## Mouse — drag a body towards a point
+//
+// A soft constraint pulling one point on a body towards a target, which is moved as the pointer
+// moves. `body_a` should be a static body; Box2D uses it only as the frame the target is in.
+
+struct MouseJoint
+    joint: Joint
+
+    target(self) -> Vec2 = c.mouse_joint_get_target(self.joint.id)
+    set_target(self, target: Vec2) = c.mouse_joint_set_target(self.joint.id, target)
+    max_force(self) -> f32 = c.mouse_joint_get_max_force(self.joint.id)
+    set_max_force(self, force: f32) = c.mouse_joint_set_max_force(self.joint.id, force)
+    set_spring(self, hertz: f32, damping_ratio: f32)
+        c.mouse_joint_set_spring_hertz(self.joint.id, hertz)
+        c.mouse_joint_set_spring_damping_ratio(self.joint.id, damping_ratio)
+    end set_spring
+end MouseJoint
+
+mouse_joint(ground: Body, b: Body, target: Vec2, hertz: f32 = 4.0, damping_ratio: f32 = 1.0,
+            max_force: f32 = 100.0, collide_connected: bool = false) -> MouseJoint
+    var d = c.default_mouse_joint_def()
+
+    d.body_id_a = ground.id
+    d.body_id_b = b.id
+    d.target = target
+    d.hertz = hertz
+    d.damping_ratio = damping_ratio
+    d.max_force = max_force
+    d.collide_connected = collide_connected
+
+    MouseJoint(Joint(ground.world, c.create_mouse_joint(ground.world.id, &d)))
+end mouse_joint
+
+// ## Filter — a joint that constrains nothing
+//
+// Its only effect is that the two bodies stop colliding with each other. Filtering by category bits
+// says "these *kinds* of thing do not collide"; this says it about one pair, which is what a
+// vehicle's chassis and its own wheels need.
+struct FilterJoint
+    joint: Joint
+
+filter_joint(a: Body, b: Body) -> FilterJoint
+    var d = c.default_filter_joint_def()
+
+    d.body_id_a = a.id
+    d.body_id_b = b.id
+
+    FilterJoint(Joint(a.world, c.create_filter_joint(a.world.id, &d)))
+end filter_joint

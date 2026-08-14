@@ -1,0 +1,105 @@
+// Asking the world what is where: overlap queries, ray casts, and the four places Box2D genuinely
+// wants a function.
+//
+// ## The callbacks are sysl functions, with no C in between
+//
+// This is the part of the binding that could not have been written before **0.0.55**. Box2D's
+// visitor signatures take a `b2ShapeId` and a `b2Vec2` **by value**, and until 0136 and 0137 an
+// aggregate parameter meant a sysl function had no address C could call — so a binding had to write
+// a C trampoline per callback, register that, and route back. Thirteen of them were planned for this
+// package.
+//
+// None were written. `@export` gives a sysl function the C convention genuinely, `&visit` is its
+// address, and Box2D calls it directly:
+//
+//     @export
+//     private collect(shape: c.ShapeId, ctx: *u8) -> bool
+//         val found: *Buf[c.ShapeId] = ptr_cast(ctx)
+//
+//         found[0].push(shape)
+//         true
+//     end collect
+//
+// **`@export` is what earns the address, and the refusal says so** if it is left off. That is a fair
+// price and it is self-documenting: a function carrying it is one whose address something outside
+// sysl is going to hold.
+//
+// ## Two shapes of query, and the second is why the first is not enough
+//
+// The friendly functions here — `overlap_aabb`, `cast_ray`, `cast_ray_closest` — collect what they
+// find into an array and hand it back, which is what most callers want and what makes a query a
+// value rather than a control-flow puzzle. They are built on the raw ones, which take the visitor
+// itself: a caller that wants to stop at the first hit, or to avoid the allocation in a frame loop,
+// passes its own `@export`ed function and pays nothing.
+//
+// **The context pointer is the caller's, not module storage**, which is what keeps both re-entrant.
+// A query that runs inside another query's visitor is fine.
+
+module sh.sysl.box2d
+
+import sh.sysl.box2d.c
+import sh.sysl.box2d.math.{Vec2, AABB, zero}
+import sysl.buf.{Buf, buf}
+
+// ## What a ray cast found
+
+struct RayHit
+    shape: Shape
+
+    // Where the ray met the shape, and the surface normal there. Both are zero for a cast that
+    // started already overlapping.
+    point: Vec2
+    normal: Vec2
+
+    // How far along the ray, from 0 at the origin to 1 at `origin + translation`.
+    fraction: f32
+
+impl Display for RayHit
+    display(self, out: *Writer, fmt: FormatSpec) =
+        display_str(str(self.shape) + " at " + str(self.point) + " (" + str(self.fraction) + ")", out, fmt)
+end RayHit
+
+// ## Collecting visitors
+//
+// Each takes a pointer to the caller's own buffer as its context and pushes into it.
+//
+// **They cannot be `private`, and the refusal is the right one**: *"private promises every caller is
+// inside its own module — and an export promises the opposite"*. An exported function has a C
+// symbol, and a symbol is exactly what an address is, so there is no such thing as an exported
+// function nobody outside can reach. They are named for what they are rather than hidden.
+
+@export
+collect_shape(shape: c.ShapeId, ctx: *u8) -> bool
+    val found: *Buf[c.ShapeId] = ptr_cast(ctx)
+
+    found[0].push(shape)
+    true
+end collect_shape
+
+// The gathering state a cast visitor writes into. It carries the world so that each hit can be
+// turned into a `Shape` as it arrives rather than in a second pass.
+struct CastCollector
+    hits: Buf[c.ShapeId]
+    points: Buf[Vec2]
+    normals: Buf[Vec2]
+    fractions: Buf[f32]
+
+// Returning 1.0 means "do not clip the ray, keep going", which is what collects every hit rather
+// than only the nearest.
+@export
+collect_cast(shape: c.ShapeId, point: Vec2, normal: Vec2, fraction: f32, ctx: *u8) -> f32
+    val into: *CastCollector = ptr_cast(ctx)
+
+    into[0].hits.push(shape)
+    into[0].points.push(point)
+    into[0].normals.push(normal)
+    into[0].fractions.push(fraction)
+    1.0
+end collect_cast
+
+// ## The queries themselves are members of `World`, and so are in `box2d.sysl`
+//
+// A type's behaviour lives in its own body (`08 §2`), and a body may not be reopened in a second
+// file — *"type 'World' is already declared"*. So `overlap_aabb`, `cast_ray`, `cast_ray_closest` and
+// the four callback registrations are declared with the rest of `World`, and what stays here is what
+// they are built out of: the two exported visitors above, and `RayHit`.

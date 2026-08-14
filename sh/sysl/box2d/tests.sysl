@@ -563,3 +563,295 @@ mass_data_is_computed()
     // A unit disc of density 1 weighs pi kilograms.
     assert((circle_mass(circle(zero(), 1.0), 1.0).mass - f32(c.PI)).abs() < 0.001)
 end mass_data_is_computed
+
+// -- joints ---------------------------------------------------------------------------------------
+
+@test("a revolute joint holds two bodies at a point")
+a_revolute_joint_holds()
+    val w = world()
+    val anchor = w.body(body_def(position = Vec2(0.0, 5.0)))
+    val arm = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(2.0, 5.0)))
+
+    arm.polygon(shape_def(density = 1.0), make_box(1.0, 0.1))
+
+    val hinge = revolute_joint(anchor, arm, Vec2(0.0, 5.0))
+
+    assert_eq(hinge.joint.kind(), JointKind.Revolute)
+    assert_eq(hinge.joint.body_a(), anchor)
+    assert_eq(hinge.joint.body_b(), arm)
+
+    for _ in 0..<120
+        w.step(1.0 / 60.0)
+
+    // **What a hinge guarantees is the distance, and only that.** The arm is a pendulum with no
+    // damping, so where it is after two seconds depends on its period — it happened to be near the
+    // top of its swing on the other side. Asserting a height here would be asserting the period.
+    assert((arm.position().distance(Vec2(0.0, 5.0)) - 2.0).abs() < 0.05)
+    assert(arm.position().distance(Vec2(2.0, 5.0)) > 1.0)
+end a_revolute_joint_holds
+
+@test("a revolute motor turns the arm the way it was told to")
+a_revolute_motor_turns()
+    val w = world(gravity = zero())
+    val anchor = w.body(body_def(position = Vec2(0.0, 0.0)))
+    val arm = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(1.0, 0.0)))
+
+    arm.polygon(shape_def(density = 1.0), make_box(1.0, 0.1))
+
+    val hinge = revolute_joint(anchor, arm, zero(), enable_motor = true, motor_speed = 2.0,
+                               max_motor_torque = 1000.0)
+
+    assert(hinge.motor_enabled())
+
+    for _ in 0..<60
+        w.step(1.0 / 60.0)
+
+    // Two radians per second for one second.
+    assert((hinge.angle() - 2.0).abs() < 0.1)
+    assert(hinge.motor_torque().abs() > 0.0)
+end a_revolute_motor_turns
+
+@test("a revolute limit stops the arm where it was told to")
+a_revolute_limit_stops()
+    val w = world()
+    val anchor = w.body(body_def(position = Vec2(0.0, 5.0)))
+    val arm = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(2.0, 5.0)))
+
+    arm.polygon(shape_def(density = 1.0), make_box(1.0, 0.1))
+
+    val hinge = revolute_joint(anchor, arm, Vec2(0.0, 5.0), enable_limit = true,
+                               lower_angle = -0.5, upper_angle = 0.5)
+
+    assert(hinge.limit_enabled())
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+
+    assert(hinge.angle() > -0.55)
+end a_revolute_limit_stops
+
+@test("a distance joint keeps its length, and takes the one it was made at")
+a_distance_joint_keeps_its_length()
+    val w = world()
+    val anchor = w.body(body_def(position = Vec2(0.0, 10.0)))
+    val bob = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 7.0)))
+
+    bob.circle(shape_def(density = 1.0), circle(zero(), 0.25))
+
+    val rope = distance_joint(anchor, bob, Vec2(0.0, 10.0), Vec2(0.0, 7.0))
+
+    assert_eq(rope.joint.kind(), JointKind.Distance)
+    assert((rope.length() - 3.0).abs() < 0.001)
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+
+    assert((bob.position().distance(Vec2(0.0, 10.0)) - 3.0).abs() < 0.05)
+end a_distance_joint_keeps_its_length
+
+@test("a prismatic joint slides along its axis and nowhere else")
+a_prismatic_joint_slides()
+    val w = world()
+    val rail = w.body(body_def(position = Vec2(0.0, 5.0)))
+    val car = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 5.0)))
+
+    car.polygon(shape_def(density = 1.0), make_box(0.5, 0.5))
+
+    val slider = prismatic_joint(rail, car, Vec2(0.0, 5.0), Vec2(1.0, 0.0), enable_limit = true,
+                                 lower_translation = -1.0, upper_translation = 1.0)
+
+    assert_eq(slider.joint.kind(), JointKind.Prismatic)
+
+    car.apply_linear_impulse_to_center(Vec2(10.0, -10.0))
+
+    for _ in 0..<120
+        w.step(1.0 / 60.0)
+
+    // Gravity and the downward impulse are both taken by the joint: only x moved, and only as far as
+    // the limit allows.
+    assert((car.position().y - 5.0).abs() < 0.01)
+    assert(slider.translation() <= 1.01)
+    assert(slider.translation() >= -1.01)
+end a_prismatic_joint_slides
+
+@test("a weld joint holds two bodies rigidly together")
+a_weld_joint_holds_rigidly()
+    val w = world()
+    val anchor = w.body(body_def(position = Vec2(0.0, 5.0)))
+    val stuck = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(1.0, 5.0)))
+
+    stuck.polygon(shape_def(density = 1.0), make_box(0.5, 0.5))
+
+    val weld = weld_joint(anchor, stuck, Vec2(0.5, 5.0))
+
+    assert_eq(weld.joint.kind(), JointKind.Weld)
+
+    for _ in 0..<120
+        w.step(1.0 / 60.0)
+
+    assert(stuck.position().distance(Vec2(1.0, 5.0)) < 0.05)
+    assert(stuck.rotation().angle().abs() < 0.05)
+end a_weld_joint_holds_rigidly
+
+@test("a filter joint stops two bodies colliding without constraining them")
+a_filter_joint_stops_collision()
+    val w = world()
+    val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
+
+    ground.polygon(shape_def(), make_box(50.0, 1.0))
+
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 4.0)))
+
+    ball.circle(shape_def(density = 1.0), circle(zero(), 0.5))
+
+    val joint = filter_joint(ground, ball)
+
+    assert_eq(joint.joint.kind(), JointKind.Filter)
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+
+    assert(ball.position().y < -2.0)
+end a_filter_joint_stops_collision
+
+@test("a joint reports the force it is carrying, and is gone once removed")
+a_joint_carries_force()
+    val w = world()
+    val anchor = w.body(body_def(position = Vec2(0.0, 10.0)))
+    val bob = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 7.0)))
+
+    bob.circle(shape_def(density = 1.0), circle(zero(), 0.25))
+
+    val rope = distance_joint(anchor, bob, Vec2(0.0, 10.0), Vec2(0.0, 7.0))
+
+    for _ in 0..<60
+        w.step(1.0 / 60.0)
+
+    // It is holding up a hanging weight, so it is under load.
+    assert(rope.joint.constraint_force().length() > 0.0)
+    assert(rope.joint.is_valid())
+
+    rope.joint.remove()
+    assert(!rope.joint.is_valid())
+end a_joint_carries_force
+
+// -- queries --------------------------------------------------------------------------------------
+
+@test("an overlap query finds the shapes whose boxes it covers, and not the others")
+overlap_finds_what_is_there()
+    val w = world()
+    val near = w.body(body_def(position = Vec2(0.0, 0.0)))
+    val far = w.body(body_def(position = Vec2(100.0, 0.0)))
+
+    near.circle(shape_def(), circle(zero(), 1.0))
+    far.circle(shape_def(), circle(zero(), 1.0))
+
+    // Nothing has stepped yet, so the broad phase is asked to catch up first.
+    w.step(1.0 / 60.0)
+
+    val found = w.overlap_aabb(AABB(Vec2(-2.0, -2.0), Vec2(2.0, 2.0)))
+
+    assert_eq(found.len, 1)
+    assert_eq(found[0].body(), near)
+    assert_eq(w.overlap_aabb(AABB(Vec2(-60.0, -2.0), Vec2(-50.0, 2.0))).len, 0)
+end overlap_finds_what_is_there
+
+@test("the closest hit along a ray is the nearest thing in the way")
+a_ray_finds_the_nearest_thing()
+    val w = world()
+    val near = w.body(body_def(position = Vec2(3.0, 0.0)))
+    val far = w.body(body_def(position = Vec2(8.0, 0.0)))
+
+    near.circle(shape_def(), circle(zero(), 1.0))
+    far.circle(shape_def(), circle(zero(), 1.0))
+    w.step(1.0 / 60.0)
+
+    val hit = w.cast_ray_closest(zero(), Vec2(20.0, 0.0))
+
+    assert(hit.is_some())
+
+    val h = hit.unwrap()
+
+    assert_eq(h.shape.body(), near)
+    // The near circle's surface is at x = 2 along a twenty-metre ray.
+    assert((h.fraction - 0.1).abs() < 0.01)
+    assert((h.point.x - 2.0).abs() < 0.01)
+    // Its normal points back towards where the ray came from.
+    assert(h.normal.x < -0.9)
+
+    assert(w.cast_ray_closest(Vec2(0.0, 50.0), Vec2(20.0, 0.0)).is_none())
+end a_ray_finds_the_nearest_thing
+
+// **This is the test that measures 0136 and 0137 against the shipped compiler.** `collect_cast` is a
+// sysl function taking two `b2Vec2` and a `b2ShapeId` — three aggregates and two scalars — whose
+// address Box2D holds and calls from its own code. Before 0.0.55 this could not be written at all:
+// `&collect_cast` was refused, and an exported function with more than one parameter read its
+// aggregates as garbage. Every hit below arriving with the right shape and a sensible point is that
+// fix, working, through a real registration rather than a probe.
+@test("a ray that passes through several shapes reports all of them, through a sysl callback")
+a_ray_reports_every_hit()
+    val w = world()
+    val a = w.body(body_def(position = Vec2(3.0, 0.0)))
+    val b = w.body(body_def(position = Vec2(8.0, 0.0)))
+
+    a.circle(shape_def(), circle(zero(), 1.0))
+    b.circle(shape_def(), circle(zero(), 1.0))
+    w.step(1.0 / 60.0)
+
+    val hits = w.cast_ray(zero(), Vec2(20.0, 0.0))
+
+    assert_eq(hits.len, 2)
+
+    // Each hit names a real body and a point on that body's circle, which is what says the
+    // aggregates crossed correctly rather than merely that something was called.
+    for h in hits
+        assert(h.shape.body() == a || h.shape.body() == b)
+        assert(h.point.y.abs() < 0.01)
+        assert(h.fraction > 0.0)
+        assert(h.normal.x < -0.9)
+end a_ray_reports_every_hit
+
+// -- a callback of the caller's own -----------------------------------------------------------------
+
+// What the custom filter saw, kept in module storage so the test can check it afterwards. A callback
+// crossing from C cannot capture, which is why this is not a closure.
+var filter_calls: int = 0
+var seen_a: c.ShapeId = c.ShapeId(0, 0, 0)
+var seen_b: c.ShapeId = c.ShapeId(0, 0, 0)
+
+// Two `b2ShapeId` by value and a pointer — exactly the signature `0137` reported reading as garbage
+// before 0.0.55.
+@export
+refuse_everything(a: c.ShapeId, b: c.ShapeId, ctx: *u8) -> bool
+    filter_calls += 1
+    seen_a = a
+    seen_b = b
+    false
+end refuse_everything
+
+@test("a custom filter written in sysl decides collisions, and sees the ids it was passed")
+a_custom_filter_decides()
+    val w = world()
+    val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
+    val floor = ground.polygon(shape_def(), make_box(50.0, 1.0))
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 4.0)))
+    val skin = ball.circle(shape_def(density = 1.0), circle(zero(), 0.5))
+
+    filter_calls = 0
+    w.set_custom_filter(&refuse_everything, null)
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+
+    // It was consulted, it said no, and the ball went through the floor.
+    assert(filter_calls > 0)
+    assert(ball.position().y < -2.0)
+
+    // And the ids it was handed are the two real shapes rather than whatever was next to them.
+    val pair_a = Shape(w, seen_a)
+    val pair_b = Shape(w, seen_b)
+
+    assert(pair_a == floor || pair_a == skin)
+    assert(pair_b == floor || pair_b == skin)
+    assert(pair_a != pair_b)
+end a_custom_filter_decides
