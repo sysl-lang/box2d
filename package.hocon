@@ -1,0 +1,9 @@
+package {
+  name    = "box2d"
+  version = "0.1.0"
+}
+
+requires {
+  heap  = true
+  posix = true
+}

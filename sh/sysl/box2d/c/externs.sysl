@@ -1,0 +1,494 @@
+// Box2D's entry points, one sysl `extern` per `B2_API` function.
+//
+// **Each of these was read out of the header rather than remembered.** A signature that disagrees
+// links perfectly and corrupts the call, and unlike the *types* beside it — which `layout.sysl`
+// checks against the C compiler — there is nothing that can check a signature. So the only defence
+// is that they were transcribed once, in order, from `box2d/box2d.h` and `box2d/collision.h`, and
+// that the module above exercises them.
+//
+// **There is no shim, and that is worth stating.** Every one of Box2D's 466 entry points takes
+// scalars, pointers and structs by value, all of which sysl can spell since 0.0.55 — so this package
+// carries no C of its own at all. The `.c` files in this directory are Box2D's, unedited.
+//
+// The names drop `b2` and the group prefix's underscore and become snake_case: `b2World_Step` is
+// `world_step`, `b2Body_GetPosition` is `body_get_position`. That keeps the C name recoverable by
+// eye, which is what matters in a layer whose job is faithfulness.
+
+module sh.sysl.box2d.c
+
+// ## Base
+
+extern "b2GetVersion" version() -> Version
+extern "b2GetByteCount" byte_count() -> i32
+extern "b2SetLengthUnitsPerMeter" set_length_units_per_meter(length_units: f32)
+extern "b2GetLengthUnitsPerMeter" length_units_per_meter() -> f32
+
+// ## Math
+//
+// Only the handful Box2D does not inline. The other seventy-nine math functions are `static inline`
+// and have no symbol to link, so the module above reimplements them in sysl — see its own header for
+// why that is the right answer and not a workaround.
+//
+// **`compute_cos_sin` is bound rather than reimplemented, deliberately.** Box2D uses a polynomial of
+// its own instead of the platform's `cosf`/`sinf` so that a simulation replays identically on two
+// machines, and calling `sysl.math.cos` here would throw that away.
+
+extern "b2Atan2" atan2(y: f32, x: f32) -> f32
+extern "b2ComputeCosSin" compute_cos_sin(radians: f32) -> CosSin
+extern "b2ComputeRotationBetweenUnitVectors" rotation_between_unit_vectors(v1: Vec2, v2: Vec2) -> Rot
+extern "b2IsValidFloat" is_valid_float(a: f32) -> bool
+extern "b2IsValidVec2" is_valid_vec2(v: Vec2) -> bool
+extern "b2IsValidRotation" is_valid_rotation(q: Rot) -> bool
+extern "b2IsValidAABB" is_valid_aabb(aabb: AABB) -> bool
+extern "b2IsValidPlane" is_valid_plane(a: Plane) -> bool
+
+// ## Geometry
+//
+// A polygon is built rather than filled in: `make_box` and friends bypass the hull, and anything
+// else goes through `compute_hull`, which welds close points and drops collinear ones.
+
+extern "b2ComputeHull" compute_hull(points: *Vec2, count: i32) -> Hull
+extern "b2ValidateHull" validate_hull(hull: *Hull) -> bool
+extern "b2MakePolygon" make_polygon(hull: *Hull, radius: f32) -> Polygon
+extern "b2MakeOffsetPolygon" make_offset_polygon(hull: *Hull, position: Vec2, rotation: Rot) -> Polygon
+extern "b2MakeOffsetRoundedPolygon" make_offset_rounded_polygon(hull: *Hull, position: Vec2, rotation: Rot,
+                                                               radius: f32) -> Polygon
+extern "b2MakeSquare" make_square(half_width: f32) -> Polygon
+extern "b2MakeBox" make_box(half_width: f32, half_height: f32) -> Polygon
+extern "b2MakeRoundedBox" make_rounded_box(half_width: f32, half_height: f32, radius: f32) -> Polygon
+extern "b2MakeOffsetBox" make_offset_box(half_width: f32, half_height: f32, center: Vec2, rotation: Rot) -> Polygon
+extern "b2MakeOffsetRoundedBox" make_offset_rounded_box(half_width: f32, half_height: f32, center: Vec2,
+                                                       rotation: Rot, radius: f32) -> Polygon
+extern "b2TransformPolygon" transform_polygon(transform: Transform, polygon: *Polygon) -> Polygon
+
+extern "b2ComputeCircleMass" compute_circle_mass(shape: *Circle, density: f32) -> MassData
+extern "b2ComputeCapsuleMass" compute_capsule_mass(shape: *Capsule, density: f32) -> MassData
+extern "b2ComputePolygonMass" compute_polygon_mass(shape: *Polygon, density: f32) -> MassData
+
+extern "b2ComputeCircleAABB" compute_circle_aabb(shape: *Circle, transform: Transform) -> AABB
+extern "b2ComputeCapsuleAABB" compute_capsule_aabb(shape: *Capsule, transform: Transform) -> AABB
+extern "b2ComputePolygonAABB" compute_polygon_aabb(shape: *Polygon, transform: Transform) -> AABB
+extern "b2ComputeSegmentAABB" compute_segment_aabb(shape: *Segment, transform: Transform) -> AABB
+
+extern "b2PointInCircle" point_in_circle(point: Vec2, shape: *Circle) -> bool
+extern "b2PointInCapsule" point_in_capsule(point: Vec2, shape: *Capsule) -> bool
+extern "b2PointInPolygon" point_in_polygon(point: Vec2, shape: *Polygon) -> bool
+
+extern "b2RayCastCircle" ray_cast_circle(input: *RayCastInput, shape: *Circle) -> CastOutput
+extern "b2RayCastCapsule" ray_cast_capsule(input: *RayCastInput, shape: *Capsule) -> CastOutput
+extern "b2RayCastSegment" ray_cast_segment(input: *RayCastInput, shape: *Segment, one_sided: bool) -> CastOutput
+extern "b2RayCastPolygon" ray_cast_polygon(input: *RayCastInput, shape: *Polygon) -> CastOutput
+
+// ## The definitions
+//
+// Every one of these must be obtained here rather than zero-filled: each carries an `internal_value`
+// Box2D checks when the definition comes back, and several carry defaults that are not zero —
+// a shape's density is 1, its mask bits are all ones, a body starts awake and enabled.
+
+extern "b2DefaultWorldDef" default_world_def() -> WorldDef
+extern "b2DefaultBodyDef" default_body_def() -> BodyDef
+extern "b2DefaultShapeDef" default_shape_def() -> ShapeDef
+extern "b2DefaultChainDef" default_chain_def() -> ChainDef
+extern "b2DefaultFilter" default_filter() -> Filter
+extern "b2DefaultQueryFilter" default_query_filter() -> QueryFilter
+extern "b2DefaultSurfaceMaterial" default_surface_material() -> SurfaceMaterial
+extern "b2DefaultExplosionDef" default_explosion_def() -> ExplosionDef
+
+extern "b2DefaultDistanceJointDef" default_distance_joint_def() -> DistanceJointDef
+extern "b2DefaultMotorJointDef" default_motor_joint_def() -> MotorJointDef
+extern "b2DefaultMouseJointDef" default_mouse_joint_def() -> MouseJointDef
+extern "b2DefaultFilterJointDef" default_filter_joint_def() -> FilterJointDef
+extern "b2DefaultPrismaticJointDef" default_prismatic_joint_def() -> PrismaticJointDef
+extern "b2DefaultRevoluteJointDef" default_revolute_joint_def() -> RevoluteJointDef
+extern "b2DefaultWeldJointDef" default_weld_joint_def() -> WeldJointDef
+extern "b2DefaultWheelJointDef" default_wheel_joint_def() -> WheelJointDef
+
+// ## The world
+
+extern "b2CreateWorld" create_world(def: *WorldDef) -> WorldId
+extern "b2DestroyWorld" destroy_world(world_id: WorldId)
+extern "b2World_IsValid" world_is_valid(id: WorldId) -> bool
+extern "b2World_Step" world_step(world_id: WorldId, time_step: f32, sub_step_count: i32)
+
+extern "b2World_GetBodyEvents" world_get_body_events(world_id: WorldId) -> BodyEvents
+extern "b2World_GetSensorEvents" world_get_sensor_events(world_id: WorldId) -> SensorEvents
+extern "b2World_GetContactEvents" world_get_contact_events(world_id: WorldId) -> ContactEvents
+
+extern "b2World_SetGravity" world_set_gravity(world_id: WorldId, gravity: Vec2)
+extern "b2World_GetGravity" world_get_gravity(world_id: WorldId) -> Vec2
+extern "b2World_EnableSleeping" world_enable_sleeping(world_id: WorldId, flag: bool)
+extern "b2World_IsSleepingEnabled" world_is_sleeping_enabled(world_id: WorldId) -> bool
+extern "b2World_EnableContinuous" world_enable_continuous(world_id: WorldId, flag: bool)
+extern "b2World_IsContinuousEnabled" world_is_continuous_enabled(world_id: WorldId) -> bool
+extern "b2World_EnableWarmStarting" world_enable_warm_starting(world_id: WorldId, flag: bool)
+extern "b2World_IsWarmStartingEnabled" world_is_warm_starting_enabled(world_id: WorldId) -> bool
+extern "b2World_EnableSpeculative" world_enable_speculative(world_id: WorldId, flag: bool)
+extern "b2World_SetRestitutionThreshold" world_set_restitution_threshold(world_id: WorldId, value: f32)
+extern "b2World_GetRestitutionThreshold" world_get_restitution_threshold(world_id: WorldId) -> f32
+extern "b2World_SetHitEventThreshold" world_set_hit_event_threshold(world_id: WorldId, value: f32)
+extern "b2World_GetHitEventThreshold" world_get_hit_event_threshold(world_id: WorldId) -> f32
+extern "b2World_SetContactTuning" world_set_contact_tuning(world_id: WorldId, hertz: f32, damping_ratio: f32,
+                                                          push_speed: f32)
+extern "b2World_SetMaximumLinearSpeed" world_set_maximum_linear_speed(world_id: WorldId, speed: f32)
+extern "b2World_GetMaximumLinearSpeed" world_get_maximum_linear_speed(world_id: WorldId) -> f32
+extern "b2World_GetAwakeBodyCount" world_get_awake_body_count(world_id: WorldId) -> i32
+extern "b2World_SetUserData" world_set_user_data(world_id: WorldId, user_data: *u8)
+extern "b2World_GetUserData" world_get_user_data(world_id: WorldId) -> *u8
+extern "b2World_RebuildStaticTree" world_rebuild_static_tree(world_id: WorldId)
+extern "b2World_Explode" world_explode(world_id: WorldId, def: *ExplosionDef)
+
+// The five callback registrations. Each takes an address, and since 0.0.55 an `@export`ed sysl
+// function has one — see `0136` and `0137`, and the module above for what a caller writes.
+extern "b2World_SetCustomFilterCallback" world_set_custom_filter_callback(world_id: WorldId,
+                                                                         fcn: *extern(ShapeId, ShapeId, *u8) -> bool,
+                                                                         context: *u8)
+extern "b2World_SetPreSolveCallback" world_set_pre_solve_callback(world_id: WorldId,
+                                                                 fcn: *extern(ShapeId, ShapeId, *Manifold, *u8) -> bool,
+                                                                 context: *u8)
+extern "b2World_SetFrictionCallback" world_set_friction_callback(world_id: WorldId,
+                                                                fcn: *extern(f32, i32, f32, i32) -> f32)
+extern "b2World_SetRestitutionCallback" world_set_restitution_callback(world_id: WorldId,
+                                                                      fcn: *extern(f32, i32, f32, i32) -> f32)
+
+// ## Queries
+
+extern "b2World_OverlapAABB" world_overlap_aabb(world_id: WorldId, aabb: AABB, filter: QueryFilter,
+                                                fcn: *extern(ShapeId, *u8) -> bool, context: *u8) -> TreeStats
+extern "b2World_OverlapShape" world_overlap_shape(world_id: WorldId, proxy: *ShapeProxy, filter: QueryFilter,
+                                                  fcn: *extern(ShapeId, *u8) -> bool, context: *u8) -> TreeStats
+extern "b2World_CastRay" world_cast_ray(world_id: WorldId, origin: Vec2, translation: Vec2, filter: QueryFilter,
+                                        fcn: *extern(ShapeId, Vec2, Vec2, f32, *u8) -> f32,
+                                        context: *u8) -> TreeStats
+extern "b2World_CastRayClosest" world_cast_ray_closest(world_id: WorldId, origin: Vec2, translation: Vec2,
+                                                       filter: QueryFilter) -> RayResult
+extern "b2World_CastShape" world_cast_shape(world_id: WorldId, proxy: *ShapeProxy, translation: Vec2,
+                                            filter: QueryFilter,
+                                            fcn: *extern(ShapeId, Vec2, Vec2, f32, *u8) -> f32,
+                                            context: *u8) -> TreeStats
+
+// ## Bodies
+
+extern "b2CreateBody" create_body(world_id: WorldId, def: *BodyDef) -> BodyId
+extern "b2DestroyBody" destroy_body(body_id: BodyId)
+extern "b2Body_IsValid" body_is_valid(id: BodyId) -> bool
+extern "b2Body_GetWorld" body_get_world(body_id: BodyId) -> WorldId
+
+extern "b2Body_GetType" body_get_type(body_id: BodyId) -> i32
+extern "b2Body_SetType" body_set_type(body_id: BodyId, kind: i32)
+extern "b2Body_SetName" body_set_name(body_id: BodyId, name: *u8)
+extern "b2Body_GetName" body_get_name(body_id: BodyId) -> *u8
+extern "b2Body_SetUserData" body_set_user_data(body_id: BodyId, user_data: *u8)
+extern "b2Body_GetUserData" body_get_user_data(body_id: BodyId) -> *u8
+
+extern "b2Body_GetPosition" body_get_position(body_id: BodyId) -> Vec2
+extern "b2Body_GetRotation" body_get_rotation(body_id: BodyId) -> Rot
+extern "b2Body_GetTransform" body_get_transform(body_id: BodyId) -> Transform
+extern "b2Body_SetTransform" body_set_transform(body_id: BodyId, position: Vec2, rotation: Rot)
+extern "b2Body_SetTargetTransform" body_set_target_transform(body_id: BodyId, target: Transform, time_step: f32)
+
+extern "b2Body_GetLocalPoint" body_get_local_point(body_id: BodyId, world_point: Vec2) -> Vec2
+extern "b2Body_GetWorldPoint" body_get_world_point(body_id: BodyId, local_point: Vec2) -> Vec2
+extern "b2Body_GetLocalVector" body_get_local_vector(body_id: BodyId, world_vector: Vec2) -> Vec2
+extern "b2Body_GetWorldVector" body_get_world_vector(body_id: BodyId, local_vector: Vec2) -> Vec2
+
+extern "b2Body_GetLinearVelocity" body_get_linear_velocity(body_id: BodyId) -> Vec2
+extern "b2Body_SetLinearVelocity" body_set_linear_velocity(body_id: BodyId, linear_velocity: Vec2)
+extern "b2Body_GetAngularVelocity" body_get_angular_velocity(body_id: BodyId) -> f32
+extern "b2Body_SetAngularVelocity" body_set_angular_velocity(body_id: BodyId, angular_velocity: f32)
+extern "b2Body_GetLocalPointVelocity" body_get_local_point_velocity(body_id: BodyId, local_point: Vec2) -> Vec2
+extern "b2Body_GetWorldPointVelocity" body_get_world_point_velocity(body_id: BodyId, world_point: Vec2) -> Vec2
+
+extern "b2Body_ApplyForce" body_apply_force(body_id: BodyId, force: Vec2, point: Vec2, wake: bool)
+extern "b2Body_ApplyForceToCenter" body_apply_force_to_center(body_id: BodyId, force: Vec2, wake: bool)
+extern "b2Body_ApplyTorque" body_apply_torque(body_id: BodyId, torque: f32, wake: bool)
+extern "b2Body_ApplyLinearImpulse" body_apply_linear_impulse(body_id: BodyId, impulse: Vec2, point: Vec2, wake: bool)
+extern "b2Body_ApplyLinearImpulseToCenter" body_apply_linear_impulse_to_center(body_id: BodyId, impulse: Vec2,
+                                                                              wake: bool)
+extern "b2Body_ApplyAngularImpulse" body_apply_angular_impulse(body_id: BodyId, impulse: f32, wake: bool)
+
+extern "b2Body_GetMass" body_get_mass(body_id: BodyId) -> f32
+extern "b2Body_GetRotationalInertia" body_get_rotational_inertia(body_id: BodyId) -> f32
+extern "b2Body_GetLocalCenterOfMass" body_get_local_center_of_mass(body_id: BodyId) -> Vec2
+extern "b2Body_GetWorldCenterOfMass" body_get_world_center_of_mass(body_id: BodyId) -> Vec2
+extern "b2Body_SetMassData" body_set_mass_data(body_id: BodyId, mass_data: MassData)
+extern "b2Body_GetMassData" body_get_mass_data(body_id: BodyId) -> MassData
+extern "b2Body_ApplyMassFromShapes" body_apply_mass_from_shapes(body_id: BodyId)
+
+extern "b2Body_SetLinearDamping" body_set_linear_damping(body_id: BodyId, damping: f32)
+extern "b2Body_GetLinearDamping" body_get_linear_damping(body_id: BodyId) -> f32
+extern "b2Body_SetAngularDamping" body_set_angular_damping(body_id: BodyId, damping: f32)
+extern "b2Body_GetAngularDamping" body_get_angular_damping(body_id: BodyId) -> f32
+extern "b2Body_SetGravityScale" body_set_gravity_scale(body_id: BodyId, scale: f32)
+extern "b2Body_GetGravityScale" body_get_gravity_scale(body_id: BodyId) -> f32
+
+extern "b2Body_IsAwake" body_is_awake(body_id: BodyId) -> bool
+extern "b2Body_SetAwake" body_set_awake(body_id: BodyId, awake: bool)
+extern "b2Body_EnableSleep" body_enable_sleep(body_id: BodyId, enable_sleep: bool)
+extern "b2Body_IsSleepEnabled" body_is_sleep_enabled(body_id: BodyId) -> bool
+extern "b2Body_SetSleepThreshold" body_set_sleep_threshold(body_id: BodyId, threshold: f32)
+extern "b2Body_GetSleepThreshold" body_get_sleep_threshold(body_id: BodyId) -> f32
+extern "b2Body_IsEnabled" body_is_enabled(body_id: BodyId) -> bool
+extern "b2Body_Disable" body_disable(body_id: BodyId)
+extern "b2Body_Enable" body_enable(body_id: BodyId)
+extern "b2Body_SetFixedRotation" body_set_fixed_rotation(body_id: BodyId, flag: bool)
+extern "b2Body_IsFixedRotation" body_is_fixed_rotation(body_id: BodyId) -> bool
+extern "b2Body_SetBullet" body_set_bullet(body_id: BodyId, flag: bool)
+extern "b2Body_IsBullet" body_is_bullet(body_id: BodyId) -> bool
+extern "b2Body_EnableContactEvents" body_enable_contact_events(body_id: BodyId, flag: bool)
+extern "b2Body_EnableHitEvents" body_enable_hit_events(body_id: BodyId, flag: bool)
+
+extern "b2Body_GetShapeCount" body_get_shape_count(body_id: BodyId) -> i32
+extern "b2Body_GetShapes" body_get_shapes(body_id: BodyId, shape_array: *ShapeId, capacity: i32) -> i32
+extern "b2Body_GetJointCount" body_get_joint_count(body_id: BodyId) -> i32
+extern "b2Body_GetJoints" body_get_joints(body_id: BodyId, joint_array: *JointId, capacity: i32) -> i32
+extern "b2Body_GetContactCapacity" body_get_contact_capacity(body_id: BodyId) -> i32
+extern "b2Body_GetContactData" body_get_contact_data(body_id: BodyId, contact_data: *ContactData,
+                                                     capacity: i32) -> i32
+extern "b2Body_ComputeAABB" body_compute_aabb(body_id: BodyId) -> AABB
+
+// ## Shapes
+
+extern "b2CreateCircleShape" create_circle_shape(body_id: BodyId, def: *ShapeDef, circle: *Circle) -> ShapeId
+extern "b2CreateSegmentShape" create_segment_shape(body_id: BodyId, def: *ShapeDef, segment: *Segment) -> ShapeId
+extern "b2CreateCapsuleShape" create_capsule_shape(body_id: BodyId, def: *ShapeDef, capsule: *Capsule) -> ShapeId
+extern "b2CreatePolygonShape" create_polygon_shape(body_id: BodyId, def: *ShapeDef, polygon: *Polygon) -> ShapeId
+extern "b2DestroyShape" destroy_shape(shape_id: ShapeId, update_body_mass: bool)
+extern "b2Shape_IsValid" shape_is_valid(id: ShapeId) -> bool
+
+extern "b2Shape_GetType" shape_get_type(shape_id: ShapeId) -> i32
+extern "b2Shape_GetBody" shape_get_body(shape_id: ShapeId) -> BodyId
+extern "b2Shape_GetWorld" shape_get_world(shape_id: ShapeId) -> WorldId
+extern "b2Shape_SetUserData" shape_set_user_data(shape_id: ShapeId, user_data: *u8)
+extern "b2Shape_GetUserData" shape_get_user_data(shape_id: ShapeId) -> *u8
+
+extern "b2Shape_IsSensor" shape_is_sensor(shape_id: ShapeId) -> bool
+extern "b2Shape_SetDensity" shape_set_density(shape_id: ShapeId, density: f32, update_body_mass: bool)
+extern "b2Shape_GetDensity" shape_get_density(shape_id: ShapeId) -> f32
+extern "b2Shape_SetFriction" shape_set_friction(shape_id: ShapeId, friction: f32)
+extern "b2Shape_GetFriction" shape_get_friction(shape_id: ShapeId) -> f32
+extern "b2Shape_SetRestitution" shape_set_restitution(shape_id: ShapeId, restitution: f32)
+extern "b2Shape_GetRestitution" shape_get_restitution(shape_id: ShapeId) -> f32
+extern "b2Shape_SetMaterial" shape_set_material(shape_id: ShapeId, material: i32)
+extern "b2Shape_GetMaterial" shape_get_material(shape_id: ShapeId) -> i32
+extern "b2Shape_SetSurfaceMaterial" shape_set_surface_material(shape_id: ShapeId, material: SurfaceMaterial)
+extern "b2Shape_GetSurfaceMaterial" shape_get_surface_material(shape_id: ShapeId) -> SurfaceMaterial
+extern "b2Shape_GetFilter" shape_get_filter(shape_id: ShapeId) -> Filter
+extern "b2Shape_SetFilter" shape_set_filter(shape_id: ShapeId, filter: Filter)
+
+extern "b2Shape_EnableSensorEvents" shape_enable_sensor_events(shape_id: ShapeId, flag: bool)
+extern "b2Shape_AreSensorEventsEnabled" shape_are_sensor_events_enabled(shape_id: ShapeId) -> bool
+extern "b2Shape_EnableContactEvents" shape_enable_contact_events(shape_id: ShapeId, flag: bool)
+extern "b2Shape_AreContactEventsEnabled" shape_are_contact_events_enabled(shape_id: ShapeId) -> bool
+extern "b2Shape_EnablePreSolveEvents" shape_enable_pre_solve_events(shape_id: ShapeId, flag: bool)
+extern "b2Shape_ArePreSolveEventsEnabled" shape_are_pre_solve_events_enabled(shape_id: ShapeId) -> bool
+extern "b2Shape_EnableHitEvents" shape_enable_hit_events(shape_id: ShapeId, flag: bool)
+extern "b2Shape_AreHitEventsEnabled" shape_are_hit_events_enabled(shape_id: ShapeId) -> bool
+
+extern "b2Shape_TestPoint" shape_test_point(shape_id: ShapeId, point: Vec2) -> bool
+extern "b2Shape_RayCast" shape_ray_cast(shape_id: ShapeId, input: *RayCastInput) -> CastOutput
+extern "b2Shape_GetClosestPoint" shape_get_closest_point(shape_id: ShapeId, target: Vec2) -> Vec2
+extern "b2Shape_GetAABB" shape_get_aabb(shape_id: ShapeId) -> AABB
+extern "b2Shape_GetMassData" shape_get_mass_data(shape_id: ShapeId) -> MassData
+
+extern "b2Shape_GetCircle" shape_get_circle(shape_id: ShapeId) -> Circle
+extern "b2Shape_GetCapsule" shape_get_capsule(shape_id: ShapeId) -> Capsule
+extern "b2Shape_GetSegment" shape_get_segment(shape_id: ShapeId) -> Segment
+extern "b2Shape_GetPolygon" shape_get_polygon(shape_id: ShapeId) -> Polygon
+extern "b2Shape_GetChainSegment" shape_get_chain_segment(shape_id: ShapeId) -> ChainSegment
+extern "b2Shape_SetCircle" shape_set_circle(shape_id: ShapeId, circle: *Circle)
+extern "b2Shape_SetCapsule" shape_set_capsule(shape_id: ShapeId, capsule: *Capsule)
+extern "b2Shape_SetSegment" shape_set_segment(shape_id: ShapeId, segment: *Segment)
+extern "b2Shape_SetPolygon" shape_set_polygon(shape_id: ShapeId, polygon: *Polygon)
+
+extern "b2Shape_GetParentChain" shape_get_parent_chain(shape_id: ShapeId) -> ChainId
+extern "b2Shape_GetContactCapacity" shape_get_contact_capacity(shape_id: ShapeId) -> i32
+extern "b2Shape_GetContactData" shape_get_contact_data(shape_id: ShapeId, contact_data: *ContactData,
+                                                       capacity: i32) -> i32
+extern "b2Shape_GetSensorCapacity" shape_get_sensor_capacity(shape_id: ShapeId) -> i32
+extern "b2Shape_GetSensorOverlaps" shape_get_sensor_overlaps(shape_id: ShapeId, overlaps: *ShapeId,
+                                                             capacity: i32) -> i32
+
+// ## Chains
+
+extern "b2CreateChain" create_chain(body_id: BodyId, def: *ChainDef) -> ChainId
+extern "b2DestroyChain" destroy_chain(chain_id: ChainId)
+extern "b2Chain_IsValid" chain_is_valid(id: ChainId) -> bool
+extern "b2Chain_GetWorld" chain_get_world(chain_id: ChainId) -> WorldId
+extern "b2Chain_GetSegmentCount" chain_get_segment_count(chain_id: ChainId) -> i32
+extern "b2Chain_GetSegments" chain_get_segments(chain_id: ChainId, segment_array: *ShapeId, capacity: i32) -> i32
+extern "b2Chain_SetFriction" chain_set_friction(chain_id: ChainId, friction: f32)
+extern "b2Chain_GetFriction" chain_get_friction(chain_id: ChainId) -> f32
+extern "b2Chain_SetRestitution" chain_set_restitution(chain_id: ChainId, restitution: f32)
+extern "b2Chain_GetRestitution" chain_get_restitution(chain_id: ChainId) -> f32
+extern "b2Chain_SetMaterial" chain_set_material(chain_id: ChainId, material: i32)
+extern "b2Chain_GetMaterial" chain_get_material(chain_id: ChainId) -> i32
+
+// ## Joints — the part that is common to all eight
+
+extern "b2DestroyJoint" destroy_joint(joint_id: JointId)
+extern "b2Joint_IsValid" joint_is_valid(id: JointId) -> bool
+extern "b2Joint_GetType" joint_get_type(joint_id: JointId) -> i32
+extern "b2Joint_GetBodyA" joint_get_body_a(joint_id: JointId) -> BodyId
+extern "b2Joint_GetBodyB" joint_get_body_b(joint_id: JointId) -> BodyId
+extern "b2Joint_GetWorld" joint_get_world(joint_id: JointId) -> WorldId
+extern "b2Joint_SetLocalAnchorA" joint_set_local_anchor_a(joint_id: JointId, local_anchor: Vec2)
+extern "b2Joint_GetLocalAnchorA" joint_get_local_anchor_a(joint_id: JointId) -> Vec2
+extern "b2Joint_SetLocalAnchorB" joint_set_local_anchor_b(joint_id: JointId, local_anchor: Vec2)
+extern "b2Joint_GetLocalAnchorB" joint_get_local_anchor_b(joint_id: JointId) -> Vec2
+extern "b2Joint_SetReferenceAngle" joint_set_reference_angle(joint_id: JointId, radians: f32)
+extern "b2Joint_GetReferenceAngle" joint_get_reference_angle(joint_id: JointId) -> f32
+extern "b2Joint_SetLocalAxisA" joint_set_local_axis_a(joint_id: JointId, local_axis: Vec2)
+extern "b2Joint_GetLocalAxisA" joint_get_local_axis_a(joint_id: JointId) -> Vec2
+extern "b2Joint_SetCollideConnected" joint_set_collide_connected(joint_id: JointId, should_collide: bool)
+extern "b2Joint_GetCollideConnected" joint_get_collide_connected(joint_id: JointId) -> bool
+extern "b2Joint_SetUserData" joint_set_user_data(joint_id: JointId, user_data: *u8)
+extern "b2Joint_GetUserData" joint_get_user_data(joint_id: JointId) -> *u8
+extern "b2Joint_WakeBodies" joint_wake_bodies(joint_id: JointId)
+extern "b2Joint_GetConstraintForce" joint_get_constraint_force(joint_id: JointId) -> Vec2
+extern "b2Joint_GetConstraintTorque" joint_get_constraint_torque(joint_id: JointId) -> f32
+extern "b2Joint_GetLinearSeparation" joint_get_linear_separation(joint_id: JointId) -> f32
+extern "b2Joint_GetAngularSeparation" joint_get_angular_separation(joint_id: JointId) -> f32
+extern "b2Joint_SetConstraintTuning" joint_set_constraint_tuning(joint_id: JointId, hertz: f32, damping_ratio: f32)
+extern "b2Joint_GetConstraintTuning" joint_get_constraint_tuning(joint_id: JointId, hertz: *f32,
+                                                                damping_ratio: *f32)
+
+// ### Distance
+
+extern "b2CreateDistanceJoint" create_distance_joint(world_id: WorldId, def: *DistanceJointDef) -> JointId
+extern "b2DistanceJoint_SetLength" distance_joint_set_length(joint_id: JointId, length: f32)
+extern "b2DistanceJoint_GetLength" distance_joint_get_length(joint_id: JointId) -> f32
+extern "b2DistanceJoint_GetCurrentLength" distance_joint_get_current_length(joint_id: JointId) -> f32
+extern "b2DistanceJoint_EnableSpring" distance_joint_enable_spring(joint_id: JointId, enable: bool)
+extern "b2DistanceJoint_IsSpringEnabled" distance_joint_is_spring_enabled(joint_id: JointId) -> bool
+extern "b2DistanceJoint_SetSpringHertz" distance_joint_set_spring_hertz(joint_id: JointId, hertz: f32)
+extern "b2DistanceJoint_GetSpringHertz" distance_joint_get_spring_hertz(joint_id: JointId) -> f32
+extern "b2DistanceJoint_SetSpringDampingRatio" distance_joint_set_spring_damping_ratio(joint_id: JointId, ratio: f32)
+extern "b2DistanceJoint_GetSpringDampingRatio" distance_joint_get_spring_damping_ratio(joint_id: JointId) -> f32
+extern "b2DistanceJoint_EnableLimit" distance_joint_enable_limit(joint_id: JointId, enable: bool)
+extern "b2DistanceJoint_IsLimitEnabled" distance_joint_is_limit_enabled(joint_id: JointId) -> bool
+extern "b2DistanceJoint_SetLengthRange" distance_joint_set_length_range(joint_id: JointId, min_length: f32,
+                                                                       max_length: f32)
+extern "b2DistanceJoint_GetMinLength" distance_joint_get_min_length(joint_id: JointId) -> f32
+extern "b2DistanceJoint_GetMaxLength" distance_joint_get_max_length(joint_id: JointId) -> f32
+extern "b2DistanceJoint_EnableMotor" distance_joint_enable_motor(joint_id: JointId, enable: bool)
+extern "b2DistanceJoint_IsMotorEnabled" distance_joint_is_motor_enabled(joint_id: JointId) -> bool
+extern "b2DistanceJoint_SetMotorSpeed" distance_joint_set_motor_speed(joint_id: JointId, speed: f32)
+extern "b2DistanceJoint_GetMotorSpeed" distance_joint_get_motor_speed(joint_id: JointId) -> f32
+extern "b2DistanceJoint_SetMaxMotorForce" distance_joint_set_max_motor_force(joint_id: JointId, force: f32)
+extern "b2DistanceJoint_GetMaxMotorForce" distance_joint_get_max_motor_force(joint_id: JointId) -> f32
+extern "b2DistanceJoint_GetMotorForce" distance_joint_get_motor_force(joint_id: JointId) -> f32
+
+// ### Revolute
+
+extern "b2CreateRevoluteJoint" create_revolute_joint(world_id: WorldId, def: *RevoluteJointDef) -> JointId
+extern "b2RevoluteJoint_GetAngle" revolute_joint_get_angle(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_EnableSpring" revolute_joint_enable_spring(joint_id: JointId, enable: bool)
+extern "b2RevoluteJoint_IsSpringEnabled" revolute_joint_is_spring_enabled(joint_id: JointId) -> bool
+extern "b2RevoluteJoint_SetSpringHertz" revolute_joint_set_spring_hertz(joint_id: JointId, hertz: f32)
+extern "b2RevoluteJoint_GetSpringHertz" revolute_joint_get_spring_hertz(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_SetSpringDampingRatio" revolute_joint_set_spring_damping_ratio(joint_id: JointId, ratio: f32)
+extern "b2RevoluteJoint_GetSpringDampingRatio" revolute_joint_get_spring_damping_ratio(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_SetTargetAngle" revolute_joint_set_target_angle(joint_id: JointId, angle: f32)
+extern "b2RevoluteJoint_GetTargetAngle" revolute_joint_get_target_angle(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_EnableLimit" revolute_joint_enable_limit(joint_id: JointId, enable: bool)
+extern "b2RevoluteJoint_IsLimitEnabled" revolute_joint_is_limit_enabled(joint_id: JointId) -> bool
+extern "b2RevoluteJoint_SetLimits" revolute_joint_set_limits(joint_id: JointId, lower: f32, upper: f32)
+extern "b2RevoluteJoint_GetLowerLimit" revolute_joint_get_lower_limit(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_GetUpperLimit" revolute_joint_get_upper_limit(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_EnableMotor" revolute_joint_enable_motor(joint_id: JointId, enable: bool)
+extern "b2RevoluteJoint_IsMotorEnabled" revolute_joint_is_motor_enabled(joint_id: JointId) -> bool
+extern "b2RevoluteJoint_SetMotorSpeed" revolute_joint_set_motor_speed(joint_id: JointId, speed: f32)
+extern "b2RevoluteJoint_GetMotorSpeed" revolute_joint_get_motor_speed(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_SetMaxMotorTorque" revolute_joint_set_max_motor_torque(joint_id: JointId, torque: f32)
+extern "b2RevoluteJoint_GetMaxMotorTorque" revolute_joint_get_max_motor_torque(joint_id: JointId) -> f32
+extern "b2RevoluteJoint_GetMotorTorque" revolute_joint_get_motor_torque(joint_id: JointId) -> f32
+
+// ### Prismatic
+
+extern "b2CreatePrismaticJoint" create_prismatic_joint(world_id: WorldId, def: *PrismaticJointDef) -> JointId
+extern "b2PrismaticJoint_GetTranslation" prismatic_joint_get_translation(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_GetSpeed" prismatic_joint_get_speed(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_EnableSpring" prismatic_joint_enable_spring(joint_id: JointId, enable: bool)
+extern "b2PrismaticJoint_IsSpringEnabled" prismatic_joint_is_spring_enabled(joint_id: JointId) -> bool
+extern "b2PrismaticJoint_SetSpringHertz" prismatic_joint_set_spring_hertz(joint_id: JointId, hertz: f32)
+extern "b2PrismaticJoint_GetSpringHertz" prismatic_joint_get_spring_hertz(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_SetSpringDampingRatio" prismatic_joint_set_spring_damping_ratio(joint_id: JointId,
+                                                                                        ratio: f32)
+extern "b2PrismaticJoint_GetSpringDampingRatio" prismatic_joint_get_spring_damping_ratio(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_SetTargetTranslation" prismatic_joint_set_target_translation(joint_id: JointId,
+                                                                                     translation: f32)
+extern "b2PrismaticJoint_GetTargetTranslation" prismatic_joint_get_target_translation(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_EnableLimit" prismatic_joint_enable_limit(joint_id: JointId, enable: bool)
+extern "b2PrismaticJoint_IsLimitEnabled" prismatic_joint_is_limit_enabled(joint_id: JointId) -> bool
+extern "b2PrismaticJoint_SetLimits" prismatic_joint_set_limits(joint_id: JointId, lower: f32, upper: f32)
+extern "b2PrismaticJoint_GetLowerLimit" prismatic_joint_get_lower_limit(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_GetUpperLimit" prismatic_joint_get_upper_limit(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_EnableMotor" prismatic_joint_enable_motor(joint_id: JointId, enable: bool)
+extern "b2PrismaticJoint_IsMotorEnabled" prismatic_joint_is_motor_enabled(joint_id: JointId) -> bool
+extern "b2PrismaticJoint_SetMotorSpeed" prismatic_joint_set_motor_speed(joint_id: JointId, speed: f32)
+extern "b2PrismaticJoint_GetMotorSpeed" prismatic_joint_get_motor_speed(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_SetMaxMotorForce" prismatic_joint_set_max_motor_force(joint_id: JointId, force: f32)
+extern "b2PrismaticJoint_GetMaxMotorForce" prismatic_joint_get_max_motor_force(joint_id: JointId) -> f32
+extern "b2PrismaticJoint_GetMotorForce" prismatic_joint_get_motor_force(joint_id: JointId) -> f32
+
+// ### Weld
+
+extern "b2CreateWeldJoint" create_weld_joint(world_id: WorldId, def: *WeldJointDef) -> JointId
+extern "b2WeldJoint_SetLinearHertz" weld_joint_set_linear_hertz(joint_id: JointId, hertz: f32)
+extern "b2WeldJoint_GetLinearHertz" weld_joint_get_linear_hertz(joint_id: JointId) -> f32
+extern "b2WeldJoint_SetLinearDampingRatio" weld_joint_set_linear_damping_ratio(joint_id: JointId, ratio: f32)
+extern "b2WeldJoint_GetLinearDampingRatio" weld_joint_get_linear_damping_ratio(joint_id: JointId) -> f32
+extern "b2WeldJoint_SetAngularHertz" weld_joint_set_angular_hertz(joint_id: JointId, hertz: f32)
+extern "b2WeldJoint_GetAngularHertz" weld_joint_get_angular_hertz(joint_id: JointId) -> f32
+extern "b2WeldJoint_SetAngularDampingRatio" weld_joint_set_angular_damping_ratio(joint_id: JointId, ratio: f32)
+extern "b2WeldJoint_GetAngularDampingRatio" weld_joint_get_angular_damping_ratio(joint_id: JointId) -> f32
+
+// ### Wheel
+
+extern "b2CreateWheelJoint" create_wheel_joint(world_id: WorldId, def: *WheelJointDef) -> JointId
+extern "b2WheelJoint_EnableSpring" wheel_joint_enable_spring(joint_id: JointId, enable: bool)
+extern "b2WheelJoint_IsSpringEnabled" wheel_joint_is_spring_enabled(joint_id: JointId) -> bool
+extern "b2WheelJoint_SetSpringHertz" wheel_joint_set_spring_hertz(joint_id: JointId, hertz: f32)
+extern "b2WheelJoint_GetSpringHertz" wheel_joint_get_spring_hertz(joint_id: JointId) -> f32
+extern "b2WheelJoint_SetSpringDampingRatio" wheel_joint_set_spring_damping_ratio(joint_id: JointId, ratio: f32)
+extern "b2WheelJoint_GetSpringDampingRatio" wheel_joint_get_spring_damping_ratio(joint_id: JointId) -> f32
+extern "b2WheelJoint_EnableLimit" wheel_joint_enable_limit(joint_id: JointId, enable: bool)
+extern "b2WheelJoint_IsLimitEnabled" wheel_joint_is_limit_enabled(joint_id: JointId) -> bool
+extern "b2WheelJoint_SetLimits" wheel_joint_set_limits(joint_id: JointId, lower: f32, upper: f32)
+extern "b2WheelJoint_GetLowerLimit" wheel_joint_get_lower_limit(joint_id: JointId) -> f32
+extern "b2WheelJoint_GetUpperLimit" wheel_joint_get_upper_limit(joint_id: JointId) -> f32
+extern "b2WheelJoint_EnableMotor" wheel_joint_enable_motor(joint_id: JointId, enable: bool)
+extern "b2WheelJoint_IsMotorEnabled" wheel_joint_is_motor_enabled(joint_id: JointId) -> bool
+extern "b2WheelJoint_SetMotorSpeed" wheel_joint_set_motor_speed(joint_id: JointId, speed: f32)
+extern "b2WheelJoint_GetMotorSpeed" wheel_joint_get_motor_speed(joint_id: JointId) -> f32
+extern "b2WheelJoint_SetMaxMotorTorque" wheel_joint_set_max_motor_torque(joint_id: JointId, torque: f32)
+extern "b2WheelJoint_GetMaxMotorTorque" wheel_joint_get_max_motor_torque(joint_id: JointId) -> f32
+extern "b2WheelJoint_GetMotorTorque" wheel_joint_get_motor_torque(joint_id: JointId) -> f32
+
+// ### Motor and mouse
+
+extern "b2CreateMotorJoint" create_motor_joint(world_id: WorldId, def: *MotorJointDef) -> JointId
+extern "b2MotorJoint_SetLinearOffset" motor_joint_set_linear_offset(joint_id: JointId, offset: Vec2)
+extern "b2MotorJoint_GetLinearOffset" motor_joint_get_linear_offset(joint_id: JointId) -> Vec2
+extern "b2MotorJoint_SetAngularOffset" motor_joint_set_angular_offset(joint_id: JointId, offset: f32)
+extern "b2MotorJoint_GetAngularOffset" motor_joint_get_angular_offset(joint_id: JointId) -> f32
+extern "b2MotorJoint_SetMaxForce" motor_joint_set_max_force(joint_id: JointId, force: f32)
+extern "b2MotorJoint_GetMaxForce" motor_joint_get_max_force(joint_id: JointId) -> f32
+extern "b2MotorJoint_SetMaxTorque" motor_joint_set_max_torque(joint_id: JointId, torque: f32)
+extern "b2MotorJoint_GetMaxTorque" motor_joint_get_max_torque(joint_id: JointId) -> f32
+extern "b2MotorJoint_SetCorrectionFactor" motor_joint_set_correction_factor(joint_id: JointId, factor: f32)
+extern "b2MotorJoint_GetCorrectionFactor" motor_joint_get_correction_factor(joint_id: JointId) -> f32
+
+extern "b2CreateMouseJoint" create_mouse_joint(world_id: WorldId, def: *MouseJointDef) -> JointId
+extern "b2MouseJoint_SetTarget" mouse_joint_set_target(joint_id: JointId, target: Vec2)
+extern "b2MouseJoint_GetTarget" mouse_joint_get_target(joint_id: JointId) -> Vec2
+extern "b2MouseJoint_SetSpringHertz" mouse_joint_set_spring_hertz(joint_id: JointId, hertz: f32)
+extern "b2MouseJoint_GetSpringHertz" mouse_joint_get_spring_hertz(joint_id: JointId) -> f32
+extern "b2MouseJoint_SetSpringDampingRatio" mouse_joint_set_spring_damping_ratio(joint_id: JointId, ratio: f32)
+extern "b2MouseJoint_GetSpringDampingRatio" mouse_joint_get_spring_damping_ratio(joint_id: JointId) -> f32
+extern "b2MouseJoint_SetMaxForce" mouse_joint_set_max_force(joint_id: JointId, force: f32)
+extern "b2MouseJoint_GetMaxForce" mouse_joint_get_max_force(joint_id: JointId) -> f32
+
+// ### Filter — a joint that only disables collision between two bodies
+
+extern "b2CreateFilterJoint" create_filter_joint(world_id: WorldId, def: *FilterJointDef) -> JointId

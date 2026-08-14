@@ -1,0 +1,972 @@
+// Every one of these types is checked against Box2D's own header, by the C compiler, on the target
+// being built for.
+//
+// **A binding to a library that passes structs by value is a promise about layout, and nothing
+// ordinarily checks it.** A field declared one slot out of place links perfectly, compiles without a
+// warning, and reads whatever happens to be next to what it meant to read. The failure lands at run
+// time, in the middle of a simulation, looking like a physics bug.
+//
+// So this file asks. `c const` measures a `sizeof` and an `offsetof` per field out of `box2d/`'s
+// real headers, `@assert` compares each against what sysl laid out for the type beside it, and a
+// disagreement is a **compile error naming the field and both numbers**:
+//
+//     error: assertion failed: b2Version.minor is not where box2d puts it
+//            — the left side is 8 and the right side is 4
+//
+// It costs nothing at run time: both sides are constants, and `@assert` is a compile-time claim.
+//
+// **It is also per target.** A cross build to a machine whose `bool` or pointer is a different width
+// re-measures rather than trusting what was true on the machine the binding was written on.
+//
+// This file is generated from the declarations in `c.sysl` and should be regenerated rather than
+// edited — but read it, because what it says is the whole argument that the binding beside it is
+// correct.
+
+module sh.sysl.box2d.c
+
+// **`@include` is per file rather than per module**, because a `c const` block is measured in a probe
+// translation unit of its own and that unit includes what the file it came from names. So these two
+// lines are not a duplicate of `c.sysl`'s — they are what makes this file's three hundred
+// measurements about Box2D rather than about nothing.
+@include("stddef.h")
+@include("box2d/box2d.h")
+
+// `b2Vec2` — 2 fields
+c const
+    SIZEOF_VEC2: usize = "sizeof(b2Vec2)"
+    OFF_VEC2_X: usize = "offsetof(b2Vec2, x)"
+    OFF_VEC2_Y: usize = "offsetof(b2Vec2, y)"
+
+@assert(sizeof(Vec2) == SIZEOF_VEC2, "b2Vec2 is not the size box2d says it is")
+@assert(offsetof(Vec2, x) == OFF_VEC2_X, "b2Vec2.x is not where box2d puts it")
+@assert(offsetof(Vec2, y) == OFF_VEC2_Y, "b2Vec2.y is not where box2d puts it")
+
+// `b2CosSin` — 2 fields
+c const
+    SIZEOF_COSSIN: usize = "sizeof(b2CosSin)"
+    OFF_COSSIN_COSINE: usize = "offsetof(b2CosSin, cosine)"
+    OFF_COSSIN_SINE: usize = "offsetof(b2CosSin, sine)"
+
+@assert(sizeof(CosSin) == SIZEOF_COSSIN, "b2CosSin is not the size box2d says it is")
+@assert(offsetof(CosSin, cosine) == OFF_COSSIN_COSINE, "b2CosSin.cosine is not where box2d puts it")
+@assert(offsetof(CosSin, sine) == OFF_COSSIN_SINE, "b2CosSin.sine is not where box2d puts it")
+
+// `b2Rot` — 2 fields
+c const
+    SIZEOF_ROT: usize = "sizeof(b2Rot)"
+    OFF_ROT_C: usize = "offsetof(b2Rot, c)"
+    OFF_ROT_S: usize = "offsetof(b2Rot, s)"
+
+@assert(sizeof(Rot) == SIZEOF_ROT, "b2Rot is not the size box2d says it is")
+@assert(offsetof(Rot, c) == OFF_ROT_C, "b2Rot.c is not where box2d puts it")
+@assert(offsetof(Rot, s) == OFF_ROT_S, "b2Rot.s is not where box2d puts it")
+
+// `b2Transform` — 2 fields
+c const
+    SIZEOF_TRANSFORM: usize = "sizeof(b2Transform)"
+    OFF_TRANSFORM_P: usize = "offsetof(b2Transform, p)"
+    OFF_TRANSFORM_Q: usize = "offsetof(b2Transform, q)"
+
+@assert(sizeof(Transform) == SIZEOF_TRANSFORM, "b2Transform is not the size box2d says it is")
+@assert(offsetof(Transform, p) == OFF_TRANSFORM_P, "b2Transform.p is not where box2d puts it")
+@assert(offsetof(Transform, q) == OFF_TRANSFORM_Q, "b2Transform.q is not where box2d puts it")
+
+// `b2Mat22` — 2 fields
+c const
+    SIZEOF_MAT22: usize = "sizeof(b2Mat22)"
+    OFF_MAT22_CX: usize = "offsetof(b2Mat22, cx)"
+    OFF_MAT22_CY: usize = "offsetof(b2Mat22, cy)"
+
+@assert(sizeof(Mat22) == SIZEOF_MAT22, "b2Mat22 is not the size box2d says it is")
+@assert(offsetof(Mat22, cx) == OFF_MAT22_CX, "b2Mat22.cx is not where box2d puts it")
+@assert(offsetof(Mat22, cy) == OFF_MAT22_CY, "b2Mat22.cy is not where box2d puts it")
+
+// `b2AABB` — 2 fields
+c const
+    SIZEOF_AABB: usize = "sizeof(b2AABB)"
+    OFF_AABB_LOWER_BOUND: usize = "offsetof(b2AABB, lowerBound)"
+    OFF_AABB_UPPER_BOUND: usize = "offsetof(b2AABB, upperBound)"
+
+@assert(sizeof(AABB) == SIZEOF_AABB, "b2AABB is not the size box2d says it is")
+@assert(offsetof(AABB, lower_bound) == OFF_AABB_LOWER_BOUND, "b2AABB.lowerBound is not where box2d puts it")
+@assert(offsetof(AABB, upper_bound) == OFF_AABB_UPPER_BOUND, "b2AABB.upperBound is not where box2d puts it")
+
+// `b2Plane` — 2 fields
+c const
+    SIZEOF_PLANE: usize = "sizeof(b2Plane)"
+    OFF_PLANE_NORMAL: usize = "offsetof(b2Plane, normal)"
+    OFF_PLANE_OFFSET: usize = "offsetof(b2Plane, offset)"
+
+@assert(sizeof(Plane) == SIZEOF_PLANE, "b2Plane is not the size box2d says it is")
+@assert(offsetof(Plane, normal) == OFF_PLANE_NORMAL, "b2Plane.normal is not where box2d puts it")
+@assert(offsetof(Plane, offset) == OFF_PLANE_OFFSET, "b2Plane.offset is not where box2d puts it")
+
+// `b2WorldId` — 2 fields
+c const
+    SIZEOF_WORLDID: usize = "sizeof(b2WorldId)"
+    OFF_WORLDID_INDEX1: usize = "offsetof(b2WorldId, index1)"
+    OFF_WORLDID_GENERATION: usize = "offsetof(b2WorldId, generation)"
+
+@assert(sizeof(WorldId) == SIZEOF_WORLDID, "b2WorldId is not the size box2d says it is")
+@assert(offsetof(WorldId, index1) == OFF_WORLDID_INDEX1, "b2WorldId.index1 is not where box2d puts it")
+@assert(offsetof(WorldId, generation) == OFF_WORLDID_GENERATION, "b2WorldId.generation is not where box2d puts it")
+
+// `b2BodyId` — 3 fields
+c const
+    SIZEOF_BODYID: usize = "sizeof(b2BodyId)"
+    OFF_BODYID_INDEX1: usize = "offsetof(b2BodyId, index1)"
+    OFF_BODYID_WORLD0: usize = "offsetof(b2BodyId, world0)"
+    OFF_BODYID_GENERATION: usize = "offsetof(b2BodyId, generation)"
+
+@assert(sizeof(BodyId) == SIZEOF_BODYID, "b2BodyId is not the size box2d says it is")
+@assert(offsetof(BodyId, index1) == OFF_BODYID_INDEX1, "b2BodyId.index1 is not where box2d puts it")
+@assert(offsetof(BodyId, world0) == OFF_BODYID_WORLD0, "b2BodyId.world0 is not where box2d puts it")
+@assert(offsetof(BodyId, generation) == OFF_BODYID_GENERATION, "b2BodyId.generation is not where box2d puts it")
+
+// `b2ShapeId` — 3 fields
+c const
+    SIZEOF_SHAPEID: usize = "sizeof(b2ShapeId)"
+    OFF_SHAPEID_INDEX1: usize = "offsetof(b2ShapeId, index1)"
+    OFF_SHAPEID_WORLD0: usize = "offsetof(b2ShapeId, world0)"
+    OFF_SHAPEID_GENERATION: usize = "offsetof(b2ShapeId, generation)"
+
+@assert(sizeof(ShapeId) == SIZEOF_SHAPEID, "b2ShapeId is not the size box2d says it is")
+@assert(offsetof(ShapeId, index1) == OFF_SHAPEID_INDEX1, "b2ShapeId.index1 is not where box2d puts it")
+@assert(offsetof(ShapeId, world0) == OFF_SHAPEID_WORLD0, "b2ShapeId.world0 is not where box2d puts it")
+@assert(offsetof(ShapeId, generation) == OFF_SHAPEID_GENERATION, "b2ShapeId.generation is not where box2d puts it")
+
+// `b2ChainId` — 3 fields
+c const
+    SIZEOF_CHAINID: usize = "sizeof(b2ChainId)"
+    OFF_CHAINID_INDEX1: usize = "offsetof(b2ChainId, index1)"
+    OFF_CHAINID_WORLD0: usize = "offsetof(b2ChainId, world0)"
+    OFF_CHAINID_GENERATION: usize = "offsetof(b2ChainId, generation)"
+
+@assert(sizeof(ChainId) == SIZEOF_CHAINID, "b2ChainId is not the size box2d says it is")
+@assert(offsetof(ChainId, index1) == OFF_CHAINID_INDEX1, "b2ChainId.index1 is not where box2d puts it")
+@assert(offsetof(ChainId, world0) == OFF_CHAINID_WORLD0, "b2ChainId.world0 is not where box2d puts it")
+@assert(offsetof(ChainId, generation) == OFF_CHAINID_GENERATION, "b2ChainId.generation is not where box2d puts it")
+
+// `b2JointId` — 3 fields
+c const
+    SIZEOF_JOINTID: usize = "sizeof(b2JointId)"
+    OFF_JOINTID_INDEX1: usize = "offsetof(b2JointId, index1)"
+    OFF_JOINTID_WORLD0: usize = "offsetof(b2JointId, world0)"
+    OFF_JOINTID_GENERATION: usize = "offsetof(b2JointId, generation)"
+
+@assert(sizeof(JointId) == SIZEOF_JOINTID, "b2JointId is not the size box2d says it is")
+@assert(offsetof(JointId, index1) == OFF_JOINTID_INDEX1, "b2JointId.index1 is not where box2d puts it")
+@assert(offsetof(JointId, world0) == OFF_JOINTID_WORLD0, "b2JointId.world0 is not where box2d puts it")
+@assert(offsetof(JointId, generation) == OFF_JOINTID_GENERATION, "b2JointId.generation is not where box2d puts it")
+
+// `b2Version` — 3 fields
+c const
+    SIZEOF_VERSION: usize = "sizeof(b2Version)"
+    OFF_VERSION_MAJOR: usize = "offsetof(b2Version, major)"
+    OFF_VERSION_MINOR: usize = "offsetof(b2Version, minor)"
+    OFF_VERSION_REVISION: usize = "offsetof(b2Version, revision)"
+
+@assert(sizeof(Version) == SIZEOF_VERSION, "b2Version is not the size box2d says it is")
+@assert(offsetof(Version, major) == OFF_VERSION_MAJOR, "b2Version.major is not where box2d puts it")
+@assert(offsetof(Version, minor) == OFF_VERSION_MINOR, "b2Version.minor is not where box2d puts it")
+@assert(offsetof(Version, revision) == OFF_VERSION_REVISION, "b2Version.revision is not where box2d puts it")
+
+// `b2Circle` — 2 fields
+c const
+    SIZEOF_CIRCLE: usize = "sizeof(b2Circle)"
+    OFF_CIRCLE_CENTER: usize = "offsetof(b2Circle, center)"
+    OFF_CIRCLE_RADIUS: usize = "offsetof(b2Circle, radius)"
+
+@assert(sizeof(Circle) == SIZEOF_CIRCLE, "b2Circle is not the size box2d says it is")
+@assert(offsetof(Circle, center) == OFF_CIRCLE_CENTER, "b2Circle.center is not where box2d puts it")
+@assert(offsetof(Circle, radius) == OFF_CIRCLE_RADIUS, "b2Circle.radius is not where box2d puts it")
+
+// `b2Capsule` — 3 fields
+c const
+    SIZEOF_CAPSULE: usize = "sizeof(b2Capsule)"
+    OFF_CAPSULE_CENTER1: usize = "offsetof(b2Capsule, center1)"
+    OFF_CAPSULE_CENTER2: usize = "offsetof(b2Capsule, center2)"
+    OFF_CAPSULE_RADIUS: usize = "offsetof(b2Capsule, radius)"
+
+@assert(sizeof(Capsule) == SIZEOF_CAPSULE, "b2Capsule is not the size box2d says it is")
+@assert(offsetof(Capsule, center1) == OFF_CAPSULE_CENTER1, "b2Capsule.center1 is not where box2d puts it")
+@assert(offsetof(Capsule, center2) == OFF_CAPSULE_CENTER2, "b2Capsule.center2 is not where box2d puts it")
+@assert(offsetof(Capsule, radius) == OFF_CAPSULE_RADIUS, "b2Capsule.radius is not where box2d puts it")
+
+// `b2Segment` — 2 fields
+c const
+    SIZEOF_SEGMENT: usize = "sizeof(b2Segment)"
+    OFF_SEGMENT_POINT1: usize = "offsetof(b2Segment, point1)"
+    OFF_SEGMENT_POINT2: usize = "offsetof(b2Segment, point2)"
+
+@assert(sizeof(Segment) == SIZEOF_SEGMENT, "b2Segment is not the size box2d says it is")
+@assert(offsetof(Segment, point1) == OFF_SEGMENT_POINT1, "b2Segment.point1 is not where box2d puts it")
+@assert(offsetof(Segment, point2) == OFF_SEGMENT_POINT2, "b2Segment.point2 is not where box2d puts it")
+
+// `b2Polygon` — 5 fields
+c const
+    SIZEOF_POLYGON: usize = "sizeof(b2Polygon)"
+    OFF_POLYGON_VERTICES: usize = "offsetof(b2Polygon, vertices)"
+    OFF_POLYGON_NORMALS: usize = "offsetof(b2Polygon, normals)"
+    OFF_POLYGON_CENTROID: usize = "offsetof(b2Polygon, centroid)"
+    OFF_POLYGON_RADIUS: usize = "offsetof(b2Polygon, radius)"
+    OFF_POLYGON_COUNT: usize = "offsetof(b2Polygon, count)"
+
+@assert(sizeof(Polygon) == SIZEOF_POLYGON, "b2Polygon is not the size box2d says it is")
+@assert(offsetof(Polygon, vertices) == OFF_POLYGON_VERTICES, "b2Polygon.vertices is not where box2d puts it")
+@assert(offsetof(Polygon, normals) == OFF_POLYGON_NORMALS, "b2Polygon.normals is not where box2d puts it")
+@assert(offsetof(Polygon, centroid) == OFF_POLYGON_CENTROID, "b2Polygon.centroid is not where box2d puts it")
+@assert(offsetof(Polygon, radius) == OFF_POLYGON_RADIUS, "b2Polygon.radius is not where box2d puts it")
+@assert(offsetof(Polygon, count) == OFF_POLYGON_COUNT, "b2Polygon.count is not where box2d puts it")
+
+// `b2ChainSegment` — 4 fields
+c const
+    SIZEOF_CHAINSEGMENT: usize = "sizeof(b2ChainSegment)"
+    OFF_CHAINSEGMENT_GHOST1: usize = "offsetof(b2ChainSegment, ghost1)"
+    OFF_CHAINSEGMENT_SEGMENT: usize = "offsetof(b2ChainSegment, segment)"
+    OFF_CHAINSEGMENT_GHOST2: usize = "offsetof(b2ChainSegment, ghost2)"
+    OFF_CHAINSEGMENT_CHAIN_ID: usize = "offsetof(b2ChainSegment, chainId)"
+
+@assert(sizeof(ChainSegment) == SIZEOF_CHAINSEGMENT, "b2ChainSegment is not the size box2d says it is")
+@assert(offsetof(ChainSegment, ghost1) == OFF_CHAINSEGMENT_GHOST1, "b2ChainSegment.ghost1 is not where box2d puts it")
+@assert(offsetof(ChainSegment, segment) == OFF_CHAINSEGMENT_SEGMENT, "b2ChainSegment.segment is not where box2d puts it")
+@assert(offsetof(ChainSegment, ghost2) == OFF_CHAINSEGMENT_GHOST2, "b2ChainSegment.ghost2 is not where box2d puts it")
+@assert(offsetof(ChainSegment, chain_id) == OFF_CHAINSEGMENT_CHAIN_ID, "b2ChainSegment.chainId is not where box2d puts it")
+
+// `b2Hull` — 2 fields
+c const
+    SIZEOF_HULL: usize = "sizeof(b2Hull)"
+    OFF_HULL_POINTS: usize = "offsetof(b2Hull, points)"
+    OFF_HULL_COUNT: usize = "offsetof(b2Hull, count)"
+
+@assert(sizeof(Hull) == SIZEOF_HULL, "b2Hull is not the size box2d says it is")
+@assert(offsetof(Hull, points) == OFF_HULL_POINTS, "b2Hull.points is not where box2d puts it")
+@assert(offsetof(Hull, count) == OFF_HULL_COUNT, "b2Hull.count is not where box2d puts it")
+
+// `b2MassData` — 3 fields
+c const
+    SIZEOF_MASSDATA: usize = "sizeof(b2MassData)"
+    OFF_MASSDATA_MASS: usize = "offsetof(b2MassData, mass)"
+    OFF_MASSDATA_CENTER: usize = "offsetof(b2MassData, center)"
+    OFF_MASSDATA_ROTATIONAL_INERTIA: usize = "offsetof(b2MassData, rotationalInertia)"
+
+@assert(sizeof(MassData) == SIZEOF_MASSDATA, "b2MassData is not the size box2d says it is")
+@assert(offsetof(MassData, mass) == OFF_MASSDATA_MASS, "b2MassData.mass is not where box2d puts it")
+@assert(offsetof(MassData, center) == OFF_MASSDATA_CENTER, "b2MassData.center is not where box2d puts it")
+@assert(offsetof(MassData, rotational_inertia) == OFF_MASSDATA_ROTATIONAL_INERTIA, "b2MassData.rotationalInertia is not where box2d puts it")
+
+// `b2RayCastInput` — 3 fields
+c const
+    SIZEOF_RAYCASTINPUT: usize = "sizeof(b2RayCastInput)"
+    OFF_RAYCASTINPUT_ORIGIN: usize = "offsetof(b2RayCastInput, origin)"
+    OFF_RAYCASTINPUT_TRANSLATION: usize = "offsetof(b2RayCastInput, translation)"
+    OFF_RAYCASTINPUT_MAX_FRACTION: usize = "offsetof(b2RayCastInput, maxFraction)"
+
+@assert(sizeof(RayCastInput) == SIZEOF_RAYCASTINPUT, "b2RayCastInput is not the size box2d says it is")
+@assert(offsetof(RayCastInput, origin) == OFF_RAYCASTINPUT_ORIGIN, "b2RayCastInput.origin is not where box2d puts it")
+@assert(offsetof(RayCastInput, translation) == OFF_RAYCASTINPUT_TRANSLATION, "b2RayCastInput.translation is not where box2d puts it")
+@assert(offsetof(RayCastInput, max_fraction) == OFF_RAYCASTINPUT_MAX_FRACTION, "b2RayCastInput.maxFraction is not where box2d puts it")
+
+// `b2ShapeProxy` — 3 fields
+c const
+    SIZEOF_SHAPEPROXY: usize = "sizeof(b2ShapeProxy)"
+    OFF_SHAPEPROXY_POINTS: usize = "offsetof(b2ShapeProxy, points)"
+    OFF_SHAPEPROXY_COUNT: usize = "offsetof(b2ShapeProxy, count)"
+    OFF_SHAPEPROXY_RADIUS: usize = "offsetof(b2ShapeProxy, radius)"
+
+@assert(sizeof(ShapeProxy) == SIZEOF_SHAPEPROXY, "b2ShapeProxy is not the size box2d says it is")
+@assert(offsetof(ShapeProxy, points) == OFF_SHAPEPROXY_POINTS, "b2ShapeProxy.points is not where box2d puts it")
+@assert(offsetof(ShapeProxy, count) == OFF_SHAPEPROXY_COUNT, "b2ShapeProxy.count is not where box2d puts it")
+@assert(offsetof(ShapeProxy, radius) == OFF_SHAPEPROXY_RADIUS, "b2ShapeProxy.radius is not where box2d puts it")
+
+// `b2ShapeCastInput` — 4 fields
+c const
+    SIZEOF_SHAPECASTINPUT: usize = "sizeof(b2ShapeCastInput)"
+    OFF_SHAPECASTINPUT_PROXY: usize = "offsetof(b2ShapeCastInput, proxy)"
+    OFF_SHAPECASTINPUT_TRANSLATION: usize = "offsetof(b2ShapeCastInput, translation)"
+    OFF_SHAPECASTINPUT_MAX_FRACTION: usize = "offsetof(b2ShapeCastInput, maxFraction)"
+    OFF_SHAPECASTINPUT_CAN_ENCROACH: usize = "offsetof(b2ShapeCastInput, canEncroach)"
+
+@assert(sizeof(ShapeCastInput) == SIZEOF_SHAPECASTINPUT, "b2ShapeCastInput is not the size box2d says it is")
+@assert(offsetof(ShapeCastInput, proxy) == OFF_SHAPECASTINPUT_PROXY, "b2ShapeCastInput.proxy is not where box2d puts it")
+@assert(offsetof(ShapeCastInput, translation) == OFF_SHAPECASTINPUT_TRANSLATION, "b2ShapeCastInput.translation is not where box2d puts it")
+@assert(offsetof(ShapeCastInput, max_fraction) == OFF_SHAPECASTINPUT_MAX_FRACTION, "b2ShapeCastInput.maxFraction is not where box2d puts it")
+@assert(offsetof(ShapeCastInput, can_encroach) == OFF_SHAPECASTINPUT_CAN_ENCROACH, "b2ShapeCastInput.canEncroach is not where box2d puts it")
+
+// `b2CastOutput` — 5 fields
+c const
+    SIZEOF_CASTOUTPUT: usize = "sizeof(b2CastOutput)"
+    OFF_CASTOUTPUT_NORMAL: usize = "offsetof(b2CastOutput, normal)"
+    OFF_CASTOUTPUT_POINT: usize = "offsetof(b2CastOutput, point)"
+    OFF_CASTOUTPUT_FRACTION: usize = "offsetof(b2CastOutput, fraction)"
+    OFF_CASTOUTPUT_ITERATIONS: usize = "offsetof(b2CastOutput, iterations)"
+    OFF_CASTOUTPUT_HIT: usize = "offsetof(b2CastOutput, hit)"
+
+@assert(sizeof(CastOutput) == SIZEOF_CASTOUTPUT, "b2CastOutput is not the size box2d says it is")
+@assert(offsetof(CastOutput, normal) == OFF_CASTOUTPUT_NORMAL, "b2CastOutput.normal is not where box2d puts it")
+@assert(offsetof(CastOutput, point) == OFF_CASTOUTPUT_POINT, "b2CastOutput.point is not where box2d puts it")
+@assert(offsetof(CastOutput, fraction) == OFF_CASTOUTPUT_FRACTION, "b2CastOutput.fraction is not where box2d puts it")
+@assert(offsetof(CastOutput, iterations) == OFF_CASTOUTPUT_ITERATIONS, "b2CastOutput.iterations is not where box2d puts it")
+@assert(offsetof(CastOutput, hit) == OFF_CASTOUTPUT_HIT, "b2CastOutput.hit is not where box2d puts it")
+
+// `b2RayResult` — 7 fields
+c const
+    SIZEOF_RAYRESULT: usize = "sizeof(b2RayResult)"
+    OFF_RAYRESULT_SHAPE_ID: usize = "offsetof(b2RayResult, shapeId)"
+    OFF_RAYRESULT_POINT: usize = "offsetof(b2RayResult, point)"
+    OFF_RAYRESULT_NORMAL: usize = "offsetof(b2RayResult, normal)"
+    OFF_RAYRESULT_FRACTION: usize = "offsetof(b2RayResult, fraction)"
+    OFF_RAYRESULT_NODE_VISITS: usize = "offsetof(b2RayResult, nodeVisits)"
+    OFF_RAYRESULT_LEAF_VISITS: usize = "offsetof(b2RayResult, leafVisits)"
+    OFF_RAYRESULT_HIT: usize = "offsetof(b2RayResult, hit)"
+
+@assert(sizeof(RayResult) == SIZEOF_RAYRESULT, "b2RayResult is not the size box2d says it is")
+@assert(offsetof(RayResult, shape_id) == OFF_RAYRESULT_SHAPE_ID, "b2RayResult.shapeId is not where box2d puts it")
+@assert(offsetof(RayResult, point) == OFF_RAYRESULT_POINT, "b2RayResult.point is not where box2d puts it")
+@assert(offsetof(RayResult, normal) == OFF_RAYRESULT_NORMAL, "b2RayResult.normal is not where box2d puts it")
+@assert(offsetof(RayResult, fraction) == OFF_RAYRESULT_FRACTION, "b2RayResult.fraction is not where box2d puts it")
+@assert(offsetof(RayResult, node_visits) == OFF_RAYRESULT_NODE_VISITS, "b2RayResult.nodeVisits is not where box2d puts it")
+@assert(offsetof(RayResult, leaf_visits) == OFF_RAYRESULT_LEAF_VISITS, "b2RayResult.leafVisits is not where box2d puts it")
+@assert(offsetof(RayResult, hit) == OFF_RAYRESULT_HIT, "b2RayResult.hit is not where box2d puts it")
+
+// `b2TreeStats` — 2 fields
+c const
+    SIZEOF_TREESTATS: usize = "sizeof(b2TreeStats)"
+    OFF_TREESTATS_NODE_VISITS: usize = "offsetof(b2TreeStats, nodeVisits)"
+    OFF_TREESTATS_LEAF_VISITS: usize = "offsetof(b2TreeStats, leafVisits)"
+
+@assert(sizeof(TreeStats) == SIZEOF_TREESTATS, "b2TreeStats is not the size box2d says it is")
+@assert(offsetof(TreeStats, node_visits) == OFF_TREESTATS_NODE_VISITS, "b2TreeStats.nodeVisits is not where box2d puts it")
+@assert(offsetof(TreeStats, leaf_visits) == OFF_TREESTATS_LEAF_VISITS, "b2TreeStats.leafVisits is not where box2d puts it")
+
+// `b2PlaneResult` — 3 fields
+c const
+    SIZEOF_PLANERESULT: usize = "sizeof(b2PlaneResult)"
+    OFF_PLANERESULT_PLANE: usize = "offsetof(b2PlaneResult, plane)"
+    OFF_PLANERESULT_POINT: usize = "offsetof(b2PlaneResult, point)"
+    OFF_PLANERESULT_HIT: usize = "offsetof(b2PlaneResult, hit)"
+
+@assert(sizeof(PlaneResult) == SIZEOF_PLANERESULT, "b2PlaneResult is not the size box2d says it is")
+@assert(offsetof(PlaneResult, plane) == OFF_PLANERESULT_PLANE, "b2PlaneResult.plane is not where box2d puts it")
+@assert(offsetof(PlaneResult, point) == OFF_PLANERESULT_POINT, "b2PlaneResult.point is not where box2d puts it")
+@assert(offsetof(PlaneResult, hit) == OFF_PLANERESULT_HIT, "b2PlaneResult.hit is not where box2d puts it")
+
+// `b2ManifoldPoint` — 10 fields
+c const
+    SIZEOF_MANIFOLDPOINT: usize = "sizeof(b2ManifoldPoint)"
+    OFF_MANIFOLDPOINT_POINT: usize = "offsetof(b2ManifoldPoint, point)"
+    OFF_MANIFOLDPOINT_ANCHOR_A: usize = "offsetof(b2ManifoldPoint, anchorA)"
+    OFF_MANIFOLDPOINT_ANCHOR_B: usize = "offsetof(b2ManifoldPoint, anchorB)"
+    OFF_MANIFOLDPOINT_SEPARATION: usize = "offsetof(b2ManifoldPoint, separation)"
+    OFF_MANIFOLDPOINT_NORMAL_IMPULSE: usize = "offsetof(b2ManifoldPoint, normalImpulse)"
+    OFF_MANIFOLDPOINT_TANGENT_IMPULSE: usize = "offsetof(b2ManifoldPoint, tangentImpulse)"
+    OFF_MANIFOLDPOINT_TOTAL_NORMAL_IMPULSE: usize = "offsetof(b2ManifoldPoint, totalNormalImpulse)"
+    OFF_MANIFOLDPOINT_NORMAL_VELOCITY: usize = "offsetof(b2ManifoldPoint, normalVelocity)"
+    OFF_MANIFOLDPOINT_ID: usize = "offsetof(b2ManifoldPoint, id)"
+    OFF_MANIFOLDPOINT_PERSISTED: usize = "offsetof(b2ManifoldPoint, persisted)"
+
+@assert(sizeof(ManifoldPoint) == SIZEOF_MANIFOLDPOINT, "b2ManifoldPoint is not the size box2d says it is")
+@assert(offsetof(ManifoldPoint, point) == OFF_MANIFOLDPOINT_POINT, "b2ManifoldPoint.point is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, anchor_a) == OFF_MANIFOLDPOINT_ANCHOR_A, "b2ManifoldPoint.anchorA is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, anchor_b) == OFF_MANIFOLDPOINT_ANCHOR_B, "b2ManifoldPoint.anchorB is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, separation) == OFF_MANIFOLDPOINT_SEPARATION, "b2ManifoldPoint.separation is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, normal_impulse) == OFF_MANIFOLDPOINT_NORMAL_IMPULSE, "b2ManifoldPoint.normalImpulse is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, tangent_impulse) == OFF_MANIFOLDPOINT_TANGENT_IMPULSE, "b2ManifoldPoint.tangentImpulse is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, total_normal_impulse) == OFF_MANIFOLDPOINT_TOTAL_NORMAL_IMPULSE, "b2ManifoldPoint.totalNormalImpulse is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, normal_velocity) == OFF_MANIFOLDPOINT_NORMAL_VELOCITY, "b2ManifoldPoint.normalVelocity is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, id) == OFF_MANIFOLDPOINT_ID, "b2ManifoldPoint.id is not where box2d puts it")
+@assert(offsetof(ManifoldPoint, persisted) == OFF_MANIFOLDPOINT_PERSISTED, "b2ManifoldPoint.persisted is not where box2d puts it")
+
+// `b2Manifold` — 4 fields
+c const
+    SIZEOF_MANIFOLD: usize = "sizeof(b2Manifold)"
+    OFF_MANIFOLD_NORMAL: usize = "offsetof(b2Manifold, normal)"
+    OFF_MANIFOLD_ROLLING_IMPULSE: usize = "offsetof(b2Manifold, rollingImpulse)"
+    OFF_MANIFOLD_POINTS: usize = "offsetof(b2Manifold, points)"
+    OFF_MANIFOLD_POINT_COUNT: usize = "offsetof(b2Manifold, pointCount)"
+
+@assert(sizeof(Manifold) == SIZEOF_MANIFOLD, "b2Manifold is not the size box2d says it is")
+@assert(offsetof(Manifold, normal) == OFF_MANIFOLD_NORMAL, "b2Manifold.normal is not where box2d puts it")
+@assert(offsetof(Manifold, rolling_impulse) == OFF_MANIFOLD_ROLLING_IMPULSE, "b2Manifold.rollingImpulse is not where box2d puts it")
+@assert(offsetof(Manifold, points) == OFF_MANIFOLD_POINTS, "b2Manifold.points is not where box2d puts it")
+@assert(offsetof(Manifold, point_count) == OFF_MANIFOLD_POINT_COUNT, "b2Manifold.pointCount is not where box2d puts it")
+
+// `b2Filter` — 3 fields
+c const
+    SIZEOF_FILTER: usize = "sizeof(b2Filter)"
+    OFF_FILTER_CATEGORY_BITS: usize = "offsetof(b2Filter, categoryBits)"
+    OFF_FILTER_MASK_BITS: usize = "offsetof(b2Filter, maskBits)"
+    OFF_FILTER_GROUP_INDEX: usize = "offsetof(b2Filter, groupIndex)"
+
+@assert(sizeof(Filter) == SIZEOF_FILTER, "b2Filter is not the size box2d says it is")
+@assert(offsetof(Filter, category_bits) == OFF_FILTER_CATEGORY_BITS, "b2Filter.categoryBits is not where box2d puts it")
+@assert(offsetof(Filter, mask_bits) == OFF_FILTER_MASK_BITS, "b2Filter.maskBits is not where box2d puts it")
+@assert(offsetof(Filter, group_index) == OFF_FILTER_GROUP_INDEX, "b2Filter.groupIndex is not where box2d puts it")
+
+// `b2QueryFilter` — 2 fields
+c const
+    SIZEOF_QUERYFILTER: usize = "sizeof(b2QueryFilter)"
+    OFF_QUERYFILTER_CATEGORY_BITS: usize = "offsetof(b2QueryFilter, categoryBits)"
+    OFF_QUERYFILTER_MASK_BITS: usize = "offsetof(b2QueryFilter, maskBits)"
+
+@assert(sizeof(QueryFilter) == SIZEOF_QUERYFILTER, "b2QueryFilter is not the size box2d says it is")
+@assert(offsetof(QueryFilter, category_bits) == OFF_QUERYFILTER_CATEGORY_BITS, "b2QueryFilter.categoryBits is not where box2d puts it")
+@assert(offsetof(QueryFilter, mask_bits) == OFF_QUERYFILTER_MASK_BITS, "b2QueryFilter.maskBits is not where box2d puts it")
+
+// `b2SurfaceMaterial` — 6 fields
+c const
+    SIZEOF_SURFACEMATERIAL: usize = "sizeof(b2SurfaceMaterial)"
+    OFF_SURFACEMATERIAL_FRICTION: usize = "offsetof(b2SurfaceMaterial, friction)"
+    OFF_SURFACEMATERIAL_RESTITUTION: usize = "offsetof(b2SurfaceMaterial, restitution)"
+    OFF_SURFACEMATERIAL_ROLLING_RESISTANCE: usize = "offsetof(b2SurfaceMaterial, rollingResistance)"
+    OFF_SURFACEMATERIAL_TANGENT_SPEED: usize = "offsetof(b2SurfaceMaterial, tangentSpeed)"
+    OFF_SURFACEMATERIAL_USER_MATERIAL_ID: usize = "offsetof(b2SurfaceMaterial, userMaterialId)"
+    OFF_SURFACEMATERIAL_CUSTOM_COLOR: usize = "offsetof(b2SurfaceMaterial, customColor)"
+
+@assert(sizeof(SurfaceMaterial) == SIZEOF_SURFACEMATERIAL, "b2SurfaceMaterial is not the size box2d says it is")
+@assert(offsetof(SurfaceMaterial, friction) == OFF_SURFACEMATERIAL_FRICTION, "b2SurfaceMaterial.friction is not where box2d puts it")
+@assert(offsetof(SurfaceMaterial, restitution) == OFF_SURFACEMATERIAL_RESTITUTION, "b2SurfaceMaterial.restitution is not where box2d puts it")
+@assert(offsetof(SurfaceMaterial, rolling_resistance) == OFF_SURFACEMATERIAL_ROLLING_RESISTANCE, "b2SurfaceMaterial.rollingResistance is not where box2d puts it")
+@assert(offsetof(SurfaceMaterial, tangent_speed) == OFF_SURFACEMATERIAL_TANGENT_SPEED, "b2SurfaceMaterial.tangentSpeed is not where box2d puts it")
+@assert(offsetof(SurfaceMaterial, user_material_id) == OFF_SURFACEMATERIAL_USER_MATERIAL_ID, "b2SurfaceMaterial.userMaterialId is not where box2d puts it")
+@assert(offsetof(SurfaceMaterial, custom_color) == OFF_SURFACEMATERIAL_CUSTOM_COLOR, "b2SurfaceMaterial.customColor is not where box2d puts it")
+
+// `b2WorldDef` — 17 fields
+c const
+    SIZEOF_WORLDDEF: usize = "sizeof(b2WorldDef)"
+    OFF_WORLDDEF_GRAVITY: usize = "offsetof(b2WorldDef, gravity)"
+    OFF_WORLDDEF_RESTITUTION_THRESHOLD: usize = "offsetof(b2WorldDef, restitutionThreshold)"
+    OFF_WORLDDEF_HIT_EVENT_THRESHOLD: usize = "offsetof(b2WorldDef, hitEventThreshold)"
+    OFF_WORLDDEF_CONTACT_HERTZ: usize = "offsetof(b2WorldDef, contactHertz)"
+    OFF_WORLDDEF_CONTACT_DAMPING_RATIO: usize = "offsetof(b2WorldDef, contactDampingRatio)"
+    OFF_WORLDDEF_MAX_CONTACT_PUSH_SPEED: usize = "offsetof(b2WorldDef, maxContactPushSpeed)"
+    OFF_WORLDDEF_MAXIMUM_LINEAR_SPEED: usize = "offsetof(b2WorldDef, maximumLinearSpeed)"
+    OFF_WORLDDEF_FRICTION_CALLBACK: usize = "offsetof(b2WorldDef, frictionCallback)"
+    OFF_WORLDDEF_RESTITUTION_CALLBACK: usize = "offsetof(b2WorldDef, restitutionCallback)"
+    OFF_WORLDDEF_ENABLE_SLEEP: usize = "offsetof(b2WorldDef, enableSleep)"
+    OFF_WORLDDEF_ENABLE_CONTINUOUS: usize = "offsetof(b2WorldDef, enableContinuous)"
+    OFF_WORLDDEF_WORKER_COUNT: usize = "offsetof(b2WorldDef, workerCount)"
+    OFF_WORLDDEF_ENQUEUE_TASK: usize = "offsetof(b2WorldDef, enqueueTask)"
+    OFF_WORLDDEF_FINISH_TASK: usize = "offsetof(b2WorldDef, finishTask)"
+    OFF_WORLDDEF_USER_TASK_CONTEXT: usize = "offsetof(b2WorldDef, userTaskContext)"
+    OFF_WORLDDEF_USER_DATA: usize = "offsetof(b2WorldDef, userData)"
+    OFF_WORLDDEF_INTERNAL_VALUE: usize = "offsetof(b2WorldDef, internalValue)"
+
+@assert(sizeof(WorldDef) == SIZEOF_WORLDDEF, "b2WorldDef is not the size box2d says it is")
+@assert(offsetof(WorldDef, gravity) == OFF_WORLDDEF_GRAVITY, "b2WorldDef.gravity is not where box2d puts it")
+@assert(offsetof(WorldDef, restitution_threshold) == OFF_WORLDDEF_RESTITUTION_THRESHOLD, "b2WorldDef.restitutionThreshold is not where box2d puts it")
+@assert(offsetof(WorldDef, hit_event_threshold) == OFF_WORLDDEF_HIT_EVENT_THRESHOLD, "b2WorldDef.hitEventThreshold is not where box2d puts it")
+@assert(offsetof(WorldDef, contact_hertz) == OFF_WORLDDEF_CONTACT_HERTZ, "b2WorldDef.contactHertz is not where box2d puts it")
+@assert(offsetof(WorldDef, contact_damping_ratio) == OFF_WORLDDEF_CONTACT_DAMPING_RATIO, "b2WorldDef.contactDampingRatio is not where box2d puts it")
+@assert(offsetof(WorldDef, max_contact_push_speed) == OFF_WORLDDEF_MAX_CONTACT_PUSH_SPEED, "b2WorldDef.maxContactPushSpeed is not where box2d puts it")
+@assert(offsetof(WorldDef, maximum_linear_speed) == OFF_WORLDDEF_MAXIMUM_LINEAR_SPEED, "b2WorldDef.maximumLinearSpeed is not where box2d puts it")
+@assert(offsetof(WorldDef, friction_callback) == OFF_WORLDDEF_FRICTION_CALLBACK, "b2WorldDef.frictionCallback is not where box2d puts it")
+@assert(offsetof(WorldDef, restitution_callback) == OFF_WORLDDEF_RESTITUTION_CALLBACK, "b2WorldDef.restitutionCallback is not where box2d puts it")
+@assert(offsetof(WorldDef, enable_sleep) == OFF_WORLDDEF_ENABLE_SLEEP, "b2WorldDef.enableSleep is not where box2d puts it")
+@assert(offsetof(WorldDef, enable_continuous) == OFF_WORLDDEF_ENABLE_CONTINUOUS, "b2WorldDef.enableContinuous is not where box2d puts it")
+@assert(offsetof(WorldDef, worker_count) == OFF_WORLDDEF_WORKER_COUNT, "b2WorldDef.workerCount is not where box2d puts it")
+@assert(offsetof(WorldDef, enqueue_task) == OFF_WORLDDEF_ENQUEUE_TASK, "b2WorldDef.enqueueTask is not where box2d puts it")
+@assert(offsetof(WorldDef, finish_task) == OFF_WORLDDEF_FINISH_TASK, "b2WorldDef.finishTask is not where box2d puts it")
+@assert(offsetof(WorldDef, user_task_context) == OFF_WORLDDEF_USER_TASK_CONTEXT, "b2WorldDef.userTaskContext is not where box2d puts it")
+@assert(offsetof(WorldDef, user_data) == OFF_WORLDDEF_USER_DATA, "b2WorldDef.userData is not where box2d puts it")
+@assert(offsetof(WorldDef, internal_value) == OFF_WORLDDEF_INTERNAL_VALUE, "b2WorldDef.internalValue is not where box2d puts it")
+
+// `b2BodyDef` — 18 fields
+c const
+    SIZEOF_BODYDEF: usize = "sizeof(b2BodyDef)"
+    OFF_BODYDEF_KIND: usize = "offsetof(b2BodyDef, type)"
+    OFF_BODYDEF_POSITION: usize = "offsetof(b2BodyDef, position)"
+    OFF_BODYDEF_ROTATION: usize = "offsetof(b2BodyDef, rotation)"
+    OFF_BODYDEF_LINEAR_VELOCITY: usize = "offsetof(b2BodyDef, linearVelocity)"
+    OFF_BODYDEF_ANGULAR_VELOCITY: usize = "offsetof(b2BodyDef, angularVelocity)"
+    OFF_BODYDEF_LINEAR_DAMPING: usize = "offsetof(b2BodyDef, linearDamping)"
+    OFF_BODYDEF_ANGULAR_DAMPING: usize = "offsetof(b2BodyDef, angularDamping)"
+    OFF_BODYDEF_GRAVITY_SCALE: usize = "offsetof(b2BodyDef, gravityScale)"
+    OFF_BODYDEF_SLEEP_THRESHOLD: usize = "offsetof(b2BodyDef, sleepThreshold)"
+    OFF_BODYDEF_NAME: usize = "offsetof(b2BodyDef, name)"
+    OFF_BODYDEF_USER_DATA: usize = "offsetof(b2BodyDef, userData)"
+    OFF_BODYDEF_ENABLE_SLEEP: usize = "offsetof(b2BodyDef, enableSleep)"
+    OFF_BODYDEF_IS_AWAKE: usize = "offsetof(b2BodyDef, isAwake)"
+    OFF_BODYDEF_FIXED_ROTATION: usize = "offsetof(b2BodyDef, fixedRotation)"
+    OFF_BODYDEF_IS_BULLET: usize = "offsetof(b2BodyDef, isBullet)"
+    OFF_BODYDEF_IS_ENABLED: usize = "offsetof(b2BodyDef, isEnabled)"
+    OFF_BODYDEF_ALLOW_FAST_ROTATION: usize = "offsetof(b2BodyDef, allowFastRotation)"
+    OFF_BODYDEF_INTERNAL_VALUE: usize = "offsetof(b2BodyDef, internalValue)"
+
+@assert(sizeof(BodyDef) == SIZEOF_BODYDEF, "b2BodyDef is not the size box2d says it is")
+@assert(offsetof(BodyDef, kind) == OFF_BODYDEF_KIND, "b2BodyDef.type is not where box2d puts it")
+@assert(offsetof(BodyDef, position) == OFF_BODYDEF_POSITION, "b2BodyDef.position is not where box2d puts it")
+@assert(offsetof(BodyDef, rotation) == OFF_BODYDEF_ROTATION, "b2BodyDef.rotation is not where box2d puts it")
+@assert(offsetof(BodyDef, linear_velocity) == OFF_BODYDEF_LINEAR_VELOCITY, "b2BodyDef.linearVelocity is not where box2d puts it")
+@assert(offsetof(BodyDef, angular_velocity) == OFF_BODYDEF_ANGULAR_VELOCITY, "b2BodyDef.angularVelocity is not where box2d puts it")
+@assert(offsetof(BodyDef, linear_damping) == OFF_BODYDEF_LINEAR_DAMPING, "b2BodyDef.linearDamping is not where box2d puts it")
+@assert(offsetof(BodyDef, angular_damping) == OFF_BODYDEF_ANGULAR_DAMPING, "b2BodyDef.angularDamping is not where box2d puts it")
+@assert(offsetof(BodyDef, gravity_scale) == OFF_BODYDEF_GRAVITY_SCALE, "b2BodyDef.gravityScale is not where box2d puts it")
+@assert(offsetof(BodyDef, sleep_threshold) == OFF_BODYDEF_SLEEP_THRESHOLD, "b2BodyDef.sleepThreshold is not where box2d puts it")
+@assert(offsetof(BodyDef, name) == OFF_BODYDEF_NAME, "b2BodyDef.name is not where box2d puts it")
+@assert(offsetof(BodyDef, user_data) == OFF_BODYDEF_USER_DATA, "b2BodyDef.userData is not where box2d puts it")
+@assert(offsetof(BodyDef, enable_sleep) == OFF_BODYDEF_ENABLE_SLEEP, "b2BodyDef.enableSleep is not where box2d puts it")
+@assert(offsetof(BodyDef, is_awake) == OFF_BODYDEF_IS_AWAKE, "b2BodyDef.isAwake is not where box2d puts it")
+@assert(offsetof(BodyDef, fixed_rotation) == OFF_BODYDEF_FIXED_ROTATION, "b2BodyDef.fixedRotation is not where box2d puts it")
+@assert(offsetof(BodyDef, is_bullet) == OFF_BODYDEF_IS_BULLET, "b2BodyDef.isBullet is not where box2d puts it")
+@assert(offsetof(BodyDef, is_enabled) == OFF_BODYDEF_IS_ENABLED, "b2BodyDef.isEnabled is not where box2d puts it")
+@assert(offsetof(BodyDef, allow_fast_rotation) == OFF_BODYDEF_ALLOW_FAST_ROTATION, "b2BodyDef.allowFastRotation is not where box2d puts it")
+@assert(offsetof(BodyDef, internal_value) == OFF_BODYDEF_INTERNAL_VALUE, "b2BodyDef.internalValue is not where box2d puts it")
+
+// `b2ShapeDef` — 12 fields
+c const
+    SIZEOF_SHAPEDEF: usize = "sizeof(b2ShapeDef)"
+    OFF_SHAPEDEF_USER_DATA: usize = "offsetof(b2ShapeDef, userData)"
+    OFF_SHAPEDEF_MATERIAL: usize = "offsetof(b2ShapeDef, material)"
+    OFF_SHAPEDEF_DENSITY: usize = "offsetof(b2ShapeDef, density)"
+    OFF_SHAPEDEF_FILTER: usize = "offsetof(b2ShapeDef, filter)"
+    OFF_SHAPEDEF_IS_SENSOR: usize = "offsetof(b2ShapeDef, isSensor)"
+    OFF_SHAPEDEF_ENABLE_SENSOR_EVENTS: usize = "offsetof(b2ShapeDef, enableSensorEvents)"
+    OFF_SHAPEDEF_ENABLE_CONTACT_EVENTS: usize = "offsetof(b2ShapeDef, enableContactEvents)"
+    OFF_SHAPEDEF_ENABLE_HIT_EVENTS: usize = "offsetof(b2ShapeDef, enableHitEvents)"
+    OFF_SHAPEDEF_ENABLE_PRE_SOLVE_EVENTS: usize = "offsetof(b2ShapeDef, enablePreSolveEvents)"
+    OFF_SHAPEDEF_INVOKE_CONTACT_CREATION: usize = "offsetof(b2ShapeDef, invokeContactCreation)"
+    OFF_SHAPEDEF_UPDATE_BODY_MASS: usize = "offsetof(b2ShapeDef, updateBodyMass)"
+    OFF_SHAPEDEF_INTERNAL_VALUE: usize = "offsetof(b2ShapeDef, internalValue)"
+
+@assert(sizeof(ShapeDef) == SIZEOF_SHAPEDEF, "b2ShapeDef is not the size box2d says it is")
+@assert(offsetof(ShapeDef, user_data) == OFF_SHAPEDEF_USER_DATA, "b2ShapeDef.userData is not where box2d puts it")
+@assert(offsetof(ShapeDef, material) == OFF_SHAPEDEF_MATERIAL, "b2ShapeDef.material is not where box2d puts it")
+@assert(offsetof(ShapeDef, density) == OFF_SHAPEDEF_DENSITY, "b2ShapeDef.density is not where box2d puts it")
+@assert(offsetof(ShapeDef, filter) == OFF_SHAPEDEF_FILTER, "b2ShapeDef.filter is not where box2d puts it")
+@assert(offsetof(ShapeDef, is_sensor) == OFF_SHAPEDEF_IS_SENSOR, "b2ShapeDef.isSensor is not where box2d puts it")
+@assert(offsetof(ShapeDef, enable_sensor_events) == OFF_SHAPEDEF_ENABLE_SENSOR_EVENTS, "b2ShapeDef.enableSensorEvents is not where box2d puts it")
+@assert(offsetof(ShapeDef, enable_contact_events) == OFF_SHAPEDEF_ENABLE_CONTACT_EVENTS, "b2ShapeDef.enableContactEvents is not where box2d puts it")
+@assert(offsetof(ShapeDef, enable_hit_events) == OFF_SHAPEDEF_ENABLE_HIT_EVENTS, "b2ShapeDef.enableHitEvents is not where box2d puts it")
+@assert(offsetof(ShapeDef, enable_pre_solve_events) == OFF_SHAPEDEF_ENABLE_PRE_SOLVE_EVENTS, "b2ShapeDef.enablePreSolveEvents is not where box2d puts it")
+@assert(offsetof(ShapeDef, invoke_contact_creation) == OFF_SHAPEDEF_INVOKE_CONTACT_CREATION, "b2ShapeDef.invokeContactCreation is not where box2d puts it")
+@assert(offsetof(ShapeDef, update_body_mass) == OFF_SHAPEDEF_UPDATE_BODY_MASS, "b2ShapeDef.updateBodyMass is not where box2d puts it")
+@assert(offsetof(ShapeDef, internal_value) == OFF_SHAPEDEF_INTERNAL_VALUE, "b2ShapeDef.internalValue is not where box2d puts it")
+
+// `b2ChainDef` — 9 fields
+c const
+    SIZEOF_CHAINDEF: usize = "sizeof(b2ChainDef)"
+    OFF_CHAINDEF_USER_DATA: usize = "offsetof(b2ChainDef, userData)"
+    OFF_CHAINDEF_POINTS: usize = "offsetof(b2ChainDef, points)"
+    OFF_CHAINDEF_COUNT: usize = "offsetof(b2ChainDef, count)"
+    OFF_CHAINDEF_MATERIALS: usize = "offsetof(b2ChainDef, materials)"
+    OFF_CHAINDEF_MATERIAL_COUNT: usize = "offsetof(b2ChainDef, materialCount)"
+    OFF_CHAINDEF_FILTER: usize = "offsetof(b2ChainDef, filter)"
+    OFF_CHAINDEF_IS_LOOP: usize = "offsetof(b2ChainDef, isLoop)"
+    OFF_CHAINDEF_ENABLE_SENSOR_EVENTS: usize = "offsetof(b2ChainDef, enableSensorEvents)"
+    OFF_CHAINDEF_INTERNAL_VALUE: usize = "offsetof(b2ChainDef, internalValue)"
+
+@assert(sizeof(ChainDef) == SIZEOF_CHAINDEF, "b2ChainDef is not the size box2d says it is")
+@assert(offsetof(ChainDef, user_data) == OFF_CHAINDEF_USER_DATA, "b2ChainDef.userData is not where box2d puts it")
+@assert(offsetof(ChainDef, points) == OFF_CHAINDEF_POINTS, "b2ChainDef.points is not where box2d puts it")
+@assert(offsetof(ChainDef, count) == OFF_CHAINDEF_COUNT, "b2ChainDef.count is not where box2d puts it")
+@assert(offsetof(ChainDef, materials) == OFF_CHAINDEF_MATERIALS, "b2ChainDef.materials is not where box2d puts it")
+@assert(offsetof(ChainDef, material_count) == OFF_CHAINDEF_MATERIAL_COUNT, "b2ChainDef.materialCount is not where box2d puts it")
+@assert(offsetof(ChainDef, filter) == OFF_CHAINDEF_FILTER, "b2ChainDef.filter is not where box2d puts it")
+@assert(offsetof(ChainDef, is_loop) == OFF_CHAINDEF_IS_LOOP, "b2ChainDef.isLoop is not where box2d puts it")
+@assert(offsetof(ChainDef, enable_sensor_events) == OFF_CHAINDEF_ENABLE_SENSOR_EVENTS, "b2ChainDef.enableSensorEvents is not where box2d puts it")
+@assert(offsetof(ChainDef, internal_value) == OFF_CHAINDEF_INTERNAL_VALUE, "b2ChainDef.internalValue is not where box2d puts it")
+
+// `b2ExplosionDef` — 5 fields
+c const
+    SIZEOF_EXPLOSIONDEF: usize = "sizeof(b2ExplosionDef)"
+    OFF_EXPLOSIONDEF_MASK_BITS: usize = "offsetof(b2ExplosionDef, maskBits)"
+    OFF_EXPLOSIONDEF_POSITION: usize = "offsetof(b2ExplosionDef, position)"
+    OFF_EXPLOSIONDEF_RADIUS: usize = "offsetof(b2ExplosionDef, radius)"
+    OFF_EXPLOSIONDEF_FALLOFF: usize = "offsetof(b2ExplosionDef, falloff)"
+    OFF_EXPLOSIONDEF_IMPULSE_PER_LENGTH: usize = "offsetof(b2ExplosionDef, impulsePerLength)"
+
+@assert(sizeof(ExplosionDef) == SIZEOF_EXPLOSIONDEF, "b2ExplosionDef is not the size box2d says it is")
+@assert(offsetof(ExplosionDef, mask_bits) == OFF_EXPLOSIONDEF_MASK_BITS, "b2ExplosionDef.maskBits is not where box2d puts it")
+@assert(offsetof(ExplosionDef, position) == OFF_EXPLOSIONDEF_POSITION, "b2ExplosionDef.position is not where box2d puts it")
+@assert(offsetof(ExplosionDef, radius) == OFF_EXPLOSIONDEF_RADIUS, "b2ExplosionDef.radius is not where box2d puts it")
+@assert(offsetof(ExplosionDef, falloff) == OFF_EXPLOSIONDEF_FALLOFF, "b2ExplosionDef.falloff is not where box2d puts it")
+@assert(offsetof(ExplosionDef, impulse_per_length) == OFF_EXPLOSIONDEF_IMPULSE_PER_LENGTH, "b2ExplosionDef.impulsePerLength is not where box2d puts it")
+
+// `b2SensorBeginTouchEvent` — 2 fields
+c const
+    SIZEOF_SENSORBEGINTOUCHEVENT: usize = "sizeof(b2SensorBeginTouchEvent)"
+    OFF_SENSORBEGINTOUCHEVENT_SENSOR_SHAPE_ID: usize = "offsetof(b2SensorBeginTouchEvent, sensorShapeId)"
+    OFF_SENSORBEGINTOUCHEVENT_VISITOR_SHAPE_ID: usize = "offsetof(b2SensorBeginTouchEvent, visitorShapeId)"
+
+@assert(sizeof(SensorBeginTouchEvent) == SIZEOF_SENSORBEGINTOUCHEVENT, "b2SensorBeginTouchEvent is not the size box2d says it is")
+@assert(offsetof(SensorBeginTouchEvent, sensor_shape_id) == OFF_SENSORBEGINTOUCHEVENT_SENSOR_SHAPE_ID, "b2SensorBeginTouchEvent.sensorShapeId is not where box2d puts it")
+@assert(offsetof(SensorBeginTouchEvent, visitor_shape_id) == OFF_SENSORBEGINTOUCHEVENT_VISITOR_SHAPE_ID, "b2SensorBeginTouchEvent.visitorShapeId is not where box2d puts it")
+
+// `b2SensorEndTouchEvent` — 2 fields
+c const
+    SIZEOF_SENSORENDTOUCHEVENT: usize = "sizeof(b2SensorEndTouchEvent)"
+    OFF_SENSORENDTOUCHEVENT_SENSOR_SHAPE_ID: usize = "offsetof(b2SensorEndTouchEvent, sensorShapeId)"
+    OFF_SENSORENDTOUCHEVENT_VISITOR_SHAPE_ID: usize = "offsetof(b2SensorEndTouchEvent, visitorShapeId)"
+
+@assert(sizeof(SensorEndTouchEvent) == SIZEOF_SENSORENDTOUCHEVENT, "b2SensorEndTouchEvent is not the size box2d says it is")
+@assert(offsetof(SensorEndTouchEvent, sensor_shape_id) == OFF_SENSORENDTOUCHEVENT_SENSOR_SHAPE_ID, "b2SensorEndTouchEvent.sensorShapeId is not where box2d puts it")
+@assert(offsetof(SensorEndTouchEvent, visitor_shape_id) == OFF_SENSORENDTOUCHEVENT_VISITOR_SHAPE_ID, "b2SensorEndTouchEvent.visitorShapeId is not where box2d puts it")
+
+// `b2SensorEvents` — 4 fields
+c const
+    SIZEOF_SENSOREVENTS: usize = "sizeof(b2SensorEvents)"
+    OFF_SENSOREVENTS_BEGIN_EVENTS: usize = "offsetof(b2SensorEvents, beginEvents)"
+    OFF_SENSOREVENTS_END_EVENTS: usize = "offsetof(b2SensorEvents, endEvents)"
+    OFF_SENSOREVENTS_BEGIN_COUNT: usize = "offsetof(b2SensorEvents, beginCount)"
+    OFF_SENSOREVENTS_END_COUNT: usize = "offsetof(b2SensorEvents, endCount)"
+
+@assert(sizeof(SensorEvents) == SIZEOF_SENSOREVENTS, "b2SensorEvents is not the size box2d says it is")
+@assert(offsetof(SensorEvents, begin_events) == OFF_SENSOREVENTS_BEGIN_EVENTS, "b2SensorEvents.beginEvents is not where box2d puts it")
+@assert(offsetof(SensorEvents, end_events) == OFF_SENSOREVENTS_END_EVENTS, "b2SensorEvents.endEvents is not where box2d puts it")
+@assert(offsetof(SensorEvents, begin_count) == OFF_SENSOREVENTS_BEGIN_COUNT, "b2SensorEvents.beginCount is not where box2d puts it")
+@assert(offsetof(SensorEvents, end_count) == OFF_SENSOREVENTS_END_COUNT, "b2SensorEvents.endCount is not where box2d puts it")
+
+// `b2ContactBeginTouchEvent` — 3 fields
+c const
+    SIZEOF_CONTACTBEGINTOUCHEVENT: usize = "sizeof(b2ContactBeginTouchEvent)"
+    OFF_CONTACTBEGINTOUCHEVENT_SHAPE_ID_A: usize = "offsetof(b2ContactBeginTouchEvent, shapeIdA)"
+    OFF_CONTACTBEGINTOUCHEVENT_SHAPE_ID_B: usize = "offsetof(b2ContactBeginTouchEvent, shapeIdB)"
+    OFF_CONTACTBEGINTOUCHEVENT_MANIFOLD: usize = "offsetof(b2ContactBeginTouchEvent, manifold)"
+
+@assert(sizeof(ContactBeginTouchEvent) == SIZEOF_CONTACTBEGINTOUCHEVENT, "b2ContactBeginTouchEvent is not the size box2d says it is")
+@assert(offsetof(ContactBeginTouchEvent, shape_id_a) == OFF_CONTACTBEGINTOUCHEVENT_SHAPE_ID_A, "b2ContactBeginTouchEvent.shapeIdA is not where box2d puts it")
+@assert(offsetof(ContactBeginTouchEvent, shape_id_b) == OFF_CONTACTBEGINTOUCHEVENT_SHAPE_ID_B, "b2ContactBeginTouchEvent.shapeIdB is not where box2d puts it")
+@assert(offsetof(ContactBeginTouchEvent, manifold) == OFF_CONTACTBEGINTOUCHEVENT_MANIFOLD, "b2ContactBeginTouchEvent.manifold is not where box2d puts it")
+
+// `b2ContactEndTouchEvent` — 2 fields
+c const
+    SIZEOF_CONTACTENDTOUCHEVENT: usize = "sizeof(b2ContactEndTouchEvent)"
+    OFF_CONTACTENDTOUCHEVENT_SHAPE_ID_A: usize = "offsetof(b2ContactEndTouchEvent, shapeIdA)"
+    OFF_CONTACTENDTOUCHEVENT_SHAPE_ID_B: usize = "offsetof(b2ContactEndTouchEvent, shapeIdB)"
+
+@assert(sizeof(ContactEndTouchEvent) == SIZEOF_CONTACTENDTOUCHEVENT, "b2ContactEndTouchEvent is not the size box2d says it is")
+@assert(offsetof(ContactEndTouchEvent, shape_id_a) == OFF_CONTACTENDTOUCHEVENT_SHAPE_ID_A, "b2ContactEndTouchEvent.shapeIdA is not where box2d puts it")
+@assert(offsetof(ContactEndTouchEvent, shape_id_b) == OFF_CONTACTENDTOUCHEVENT_SHAPE_ID_B, "b2ContactEndTouchEvent.shapeIdB is not where box2d puts it")
+
+// `b2ContactHitEvent` — 5 fields
+c const
+    SIZEOF_CONTACTHITEVENT: usize = "sizeof(b2ContactHitEvent)"
+    OFF_CONTACTHITEVENT_SHAPE_ID_A: usize = "offsetof(b2ContactHitEvent, shapeIdA)"
+    OFF_CONTACTHITEVENT_SHAPE_ID_B: usize = "offsetof(b2ContactHitEvent, shapeIdB)"
+    OFF_CONTACTHITEVENT_POINT: usize = "offsetof(b2ContactHitEvent, point)"
+    OFF_CONTACTHITEVENT_NORMAL: usize = "offsetof(b2ContactHitEvent, normal)"
+    OFF_CONTACTHITEVENT_APPROACH_SPEED: usize = "offsetof(b2ContactHitEvent, approachSpeed)"
+
+@assert(sizeof(ContactHitEvent) == SIZEOF_CONTACTHITEVENT, "b2ContactHitEvent is not the size box2d says it is")
+@assert(offsetof(ContactHitEvent, shape_id_a) == OFF_CONTACTHITEVENT_SHAPE_ID_A, "b2ContactHitEvent.shapeIdA is not where box2d puts it")
+@assert(offsetof(ContactHitEvent, shape_id_b) == OFF_CONTACTHITEVENT_SHAPE_ID_B, "b2ContactHitEvent.shapeIdB is not where box2d puts it")
+@assert(offsetof(ContactHitEvent, point) == OFF_CONTACTHITEVENT_POINT, "b2ContactHitEvent.point is not where box2d puts it")
+@assert(offsetof(ContactHitEvent, normal) == OFF_CONTACTHITEVENT_NORMAL, "b2ContactHitEvent.normal is not where box2d puts it")
+@assert(offsetof(ContactHitEvent, approach_speed) == OFF_CONTACTHITEVENT_APPROACH_SPEED, "b2ContactHitEvent.approachSpeed is not where box2d puts it")
+
+// `b2ContactEvents` — 6 fields
+c const
+    SIZEOF_CONTACTEVENTS: usize = "sizeof(b2ContactEvents)"
+    OFF_CONTACTEVENTS_BEGIN_EVENTS: usize = "offsetof(b2ContactEvents, beginEvents)"
+    OFF_CONTACTEVENTS_END_EVENTS: usize = "offsetof(b2ContactEvents, endEvents)"
+    OFF_CONTACTEVENTS_HIT_EVENTS: usize = "offsetof(b2ContactEvents, hitEvents)"
+    OFF_CONTACTEVENTS_BEGIN_COUNT: usize = "offsetof(b2ContactEvents, beginCount)"
+    OFF_CONTACTEVENTS_END_COUNT: usize = "offsetof(b2ContactEvents, endCount)"
+    OFF_CONTACTEVENTS_HIT_COUNT: usize = "offsetof(b2ContactEvents, hitCount)"
+
+@assert(sizeof(ContactEvents) == SIZEOF_CONTACTEVENTS, "b2ContactEvents is not the size box2d says it is")
+@assert(offsetof(ContactEvents, begin_events) == OFF_CONTACTEVENTS_BEGIN_EVENTS, "b2ContactEvents.beginEvents is not where box2d puts it")
+@assert(offsetof(ContactEvents, end_events) == OFF_CONTACTEVENTS_END_EVENTS, "b2ContactEvents.endEvents is not where box2d puts it")
+@assert(offsetof(ContactEvents, hit_events) == OFF_CONTACTEVENTS_HIT_EVENTS, "b2ContactEvents.hitEvents is not where box2d puts it")
+@assert(offsetof(ContactEvents, begin_count) == OFF_CONTACTEVENTS_BEGIN_COUNT, "b2ContactEvents.beginCount is not where box2d puts it")
+@assert(offsetof(ContactEvents, end_count) == OFF_CONTACTEVENTS_END_COUNT, "b2ContactEvents.endCount is not where box2d puts it")
+@assert(offsetof(ContactEvents, hit_count) == OFF_CONTACTEVENTS_HIT_COUNT, "b2ContactEvents.hitCount is not where box2d puts it")
+
+// `b2BodyMoveEvent` — 4 fields
+c const
+    SIZEOF_BODYMOVEEVENT: usize = "sizeof(b2BodyMoveEvent)"
+    OFF_BODYMOVEEVENT_TRANSFORM: usize = "offsetof(b2BodyMoveEvent, transform)"
+    OFF_BODYMOVEEVENT_BODY_ID: usize = "offsetof(b2BodyMoveEvent, bodyId)"
+    OFF_BODYMOVEEVENT_USER_DATA: usize = "offsetof(b2BodyMoveEvent, userData)"
+    OFF_BODYMOVEEVENT_FELL_ASLEEP: usize = "offsetof(b2BodyMoveEvent, fellAsleep)"
+
+@assert(sizeof(BodyMoveEvent) == SIZEOF_BODYMOVEEVENT, "b2BodyMoveEvent is not the size box2d says it is")
+@assert(offsetof(BodyMoveEvent, transform) == OFF_BODYMOVEEVENT_TRANSFORM, "b2BodyMoveEvent.transform is not where box2d puts it")
+@assert(offsetof(BodyMoveEvent, body_id) == OFF_BODYMOVEEVENT_BODY_ID, "b2BodyMoveEvent.bodyId is not where box2d puts it")
+@assert(offsetof(BodyMoveEvent, user_data) == OFF_BODYMOVEEVENT_USER_DATA, "b2BodyMoveEvent.userData is not where box2d puts it")
+@assert(offsetof(BodyMoveEvent, fell_asleep) == OFF_BODYMOVEEVENT_FELL_ASLEEP, "b2BodyMoveEvent.fellAsleep is not where box2d puts it")
+
+// `b2BodyEvents` — 2 fields
+c const
+    SIZEOF_BODYEVENTS: usize = "sizeof(b2BodyEvents)"
+    OFF_BODYEVENTS_MOVE_EVENTS: usize = "offsetof(b2BodyEvents, moveEvents)"
+    OFF_BODYEVENTS_MOVE_COUNT: usize = "offsetof(b2BodyEvents, moveCount)"
+
+@assert(sizeof(BodyEvents) == SIZEOF_BODYEVENTS, "b2BodyEvents is not the size box2d says it is")
+@assert(offsetof(BodyEvents, move_events) == OFF_BODYEVENTS_MOVE_EVENTS, "b2BodyEvents.moveEvents is not where box2d puts it")
+@assert(offsetof(BodyEvents, move_count) == OFF_BODYEVENTS_MOVE_COUNT, "b2BodyEvents.moveCount is not where box2d puts it")
+
+// `b2ContactData` — 3 fields
+c const
+    SIZEOF_CONTACTDATA: usize = "sizeof(b2ContactData)"
+    OFF_CONTACTDATA_SHAPE_ID_A: usize = "offsetof(b2ContactData, shapeIdA)"
+    OFF_CONTACTDATA_SHAPE_ID_B: usize = "offsetof(b2ContactData, shapeIdB)"
+    OFF_CONTACTDATA_MANIFOLD: usize = "offsetof(b2ContactData, manifold)"
+
+@assert(sizeof(ContactData) == SIZEOF_CONTACTDATA, "b2ContactData is not the size box2d says it is")
+@assert(offsetof(ContactData, shape_id_a) == OFF_CONTACTDATA_SHAPE_ID_A, "b2ContactData.shapeIdA is not where box2d puts it")
+@assert(offsetof(ContactData, shape_id_b) == OFF_CONTACTDATA_SHAPE_ID_B, "b2ContactData.shapeIdB is not where box2d puts it")
+@assert(offsetof(ContactData, manifold) == OFF_CONTACTDATA_MANIFOLD, "b2ContactData.manifold is not where box2d puts it")
+
+// `b2DistanceJointDef` — 17 fields
+c const
+    SIZEOF_DISTANCEJOINTDEF: usize = "sizeof(b2DistanceJointDef)"
+    OFF_DISTANCEJOINTDEF_BODY_ID_A: usize = "offsetof(b2DistanceJointDef, bodyIdA)"
+    OFF_DISTANCEJOINTDEF_BODY_ID_B: usize = "offsetof(b2DistanceJointDef, bodyIdB)"
+    OFF_DISTANCEJOINTDEF_LOCAL_ANCHOR_A: usize = "offsetof(b2DistanceJointDef, localAnchorA)"
+    OFF_DISTANCEJOINTDEF_LOCAL_ANCHOR_B: usize = "offsetof(b2DistanceJointDef, localAnchorB)"
+    OFF_DISTANCEJOINTDEF_LENGTH: usize = "offsetof(b2DistanceJointDef, length)"
+    OFF_DISTANCEJOINTDEF_ENABLE_SPRING: usize = "offsetof(b2DistanceJointDef, enableSpring)"
+    OFF_DISTANCEJOINTDEF_HERTZ: usize = "offsetof(b2DistanceJointDef, hertz)"
+    OFF_DISTANCEJOINTDEF_DAMPING_RATIO: usize = "offsetof(b2DistanceJointDef, dampingRatio)"
+    OFF_DISTANCEJOINTDEF_ENABLE_LIMIT: usize = "offsetof(b2DistanceJointDef, enableLimit)"
+    OFF_DISTANCEJOINTDEF_MIN_LENGTH: usize = "offsetof(b2DistanceJointDef, minLength)"
+    OFF_DISTANCEJOINTDEF_MAX_LENGTH: usize = "offsetof(b2DistanceJointDef, maxLength)"
+    OFF_DISTANCEJOINTDEF_ENABLE_MOTOR: usize = "offsetof(b2DistanceJointDef, enableMotor)"
+    OFF_DISTANCEJOINTDEF_MAX_MOTOR_FORCE: usize = "offsetof(b2DistanceJointDef, maxMotorForce)"
+    OFF_DISTANCEJOINTDEF_MOTOR_SPEED: usize = "offsetof(b2DistanceJointDef, motorSpeed)"
+    OFF_DISTANCEJOINTDEF_COLLIDE_CONNECTED: usize = "offsetof(b2DistanceJointDef, collideConnected)"
+    OFF_DISTANCEJOINTDEF_USER_DATA: usize = "offsetof(b2DistanceJointDef, userData)"
+    OFF_DISTANCEJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2DistanceJointDef, internalValue)"
+
+@assert(sizeof(DistanceJointDef) == SIZEOF_DISTANCEJOINTDEF, "b2DistanceJointDef is not the size box2d says it is")
+@assert(offsetof(DistanceJointDef, body_id_a) == OFF_DISTANCEJOINTDEF_BODY_ID_A, "b2DistanceJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, body_id_b) == OFF_DISTANCEJOINTDEF_BODY_ID_B, "b2DistanceJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, local_anchor_a) == OFF_DISTANCEJOINTDEF_LOCAL_ANCHOR_A, "b2DistanceJointDef.localAnchorA is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, local_anchor_b) == OFF_DISTANCEJOINTDEF_LOCAL_ANCHOR_B, "b2DistanceJointDef.localAnchorB is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, length) == OFF_DISTANCEJOINTDEF_LENGTH, "b2DistanceJointDef.length is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, enable_spring) == OFF_DISTANCEJOINTDEF_ENABLE_SPRING, "b2DistanceJointDef.enableSpring is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, hertz) == OFF_DISTANCEJOINTDEF_HERTZ, "b2DistanceJointDef.hertz is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, damping_ratio) == OFF_DISTANCEJOINTDEF_DAMPING_RATIO, "b2DistanceJointDef.dampingRatio is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, enable_limit) == OFF_DISTANCEJOINTDEF_ENABLE_LIMIT, "b2DistanceJointDef.enableLimit is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, min_length) == OFF_DISTANCEJOINTDEF_MIN_LENGTH, "b2DistanceJointDef.minLength is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, max_length) == OFF_DISTANCEJOINTDEF_MAX_LENGTH, "b2DistanceJointDef.maxLength is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, enable_motor) == OFF_DISTANCEJOINTDEF_ENABLE_MOTOR, "b2DistanceJointDef.enableMotor is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, max_motor_force) == OFF_DISTANCEJOINTDEF_MAX_MOTOR_FORCE, "b2DistanceJointDef.maxMotorForce is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, motor_speed) == OFF_DISTANCEJOINTDEF_MOTOR_SPEED, "b2DistanceJointDef.motorSpeed is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, collide_connected) == OFF_DISTANCEJOINTDEF_COLLIDE_CONNECTED, "b2DistanceJointDef.collideConnected is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, user_data) == OFF_DISTANCEJOINTDEF_USER_DATA, "b2DistanceJointDef.userData is not where box2d puts it")
+@assert(offsetof(DistanceJointDef, internal_value) == OFF_DISTANCEJOINTDEF_INTERNAL_VALUE, "b2DistanceJointDef.internalValue is not where box2d puts it")
+
+// `b2MotorJointDef` — 10 fields
+c const
+    SIZEOF_MOTORJOINTDEF: usize = "sizeof(b2MotorJointDef)"
+    OFF_MOTORJOINTDEF_BODY_ID_A: usize = "offsetof(b2MotorJointDef, bodyIdA)"
+    OFF_MOTORJOINTDEF_BODY_ID_B: usize = "offsetof(b2MotorJointDef, bodyIdB)"
+    OFF_MOTORJOINTDEF_LINEAR_OFFSET: usize = "offsetof(b2MotorJointDef, linearOffset)"
+    OFF_MOTORJOINTDEF_ANGULAR_OFFSET: usize = "offsetof(b2MotorJointDef, angularOffset)"
+    OFF_MOTORJOINTDEF_MAX_FORCE: usize = "offsetof(b2MotorJointDef, maxForce)"
+    OFF_MOTORJOINTDEF_MAX_TORQUE: usize = "offsetof(b2MotorJointDef, maxTorque)"
+    OFF_MOTORJOINTDEF_CORRECTION_FACTOR: usize = "offsetof(b2MotorJointDef, correctionFactor)"
+    OFF_MOTORJOINTDEF_COLLIDE_CONNECTED: usize = "offsetof(b2MotorJointDef, collideConnected)"
+    OFF_MOTORJOINTDEF_USER_DATA: usize = "offsetof(b2MotorJointDef, userData)"
+    OFF_MOTORJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2MotorJointDef, internalValue)"
+
+@assert(sizeof(MotorJointDef) == SIZEOF_MOTORJOINTDEF, "b2MotorJointDef is not the size box2d says it is")
+@assert(offsetof(MotorJointDef, body_id_a) == OFF_MOTORJOINTDEF_BODY_ID_A, "b2MotorJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(MotorJointDef, body_id_b) == OFF_MOTORJOINTDEF_BODY_ID_B, "b2MotorJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(MotorJointDef, linear_offset) == OFF_MOTORJOINTDEF_LINEAR_OFFSET, "b2MotorJointDef.linearOffset is not where box2d puts it")
+@assert(offsetof(MotorJointDef, angular_offset) == OFF_MOTORJOINTDEF_ANGULAR_OFFSET, "b2MotorJointDef.angularOffset is not where box2d puts it")
+@assert(offsetof(MotorJointDef, max_force) == OFF_MOTORJOINTDEF_MAX_FORCE, "b2MotorJointDef.maxForce is not where box2d puts it")
+@assert(offsetof(MotorJointDef, max_torque) == OFF_MOTORJOINTDEF_MAX_TORQUE, "b2MotorJointDef.maxTorque is not where box2d puts it")
+@assert(offsetof(MotorJointDef, correction_factor) == OFF_MOTORJOINTDEF_CORRECTION_FACTOR, "b2MotorJointDef.correctionFactor is not where box2d puts it")
+@assert(offsetof(MotorJointDef, collide_connected) == OFF_MOTORJOINTDEF_COLLIDE_CONNECTED, "b2MotorJointDef.collideConnected is not where box2d puts it")
+@assert(offsetof(MotorJointDef, user_data) == OFF_MOTORJOINTDEF_USER_DATA, "b2MotorJointDef.userData is not where box2d puts it")
+@assert(offsetof(MotorJointDef, internal_value) == OFF_MOTORJOINTDEF_INTERNAL_VALUE, "b2MotorJointDef.internalValue is not where box2d puts it")
+
+// `b2MouseJointDef` — 9 fields
+c const
+    SIZEOF_MOUSEJOINTDEF: usize = "sizeof(b2MouseJointDef)"
+    OFF_MOUSEJOINTDEF_BODY_ID_A: usize = "offsetof(b2MouseJointDef, bodyIdA)"
+    OFF_MOUSEJOINTDEF_BODY_ID_B: usize = "offsetof(b2MouseJointDef, bodyIdB)"
+    OFF_MOUSEJOINTDEF_TARGET: usize = "offsetof(b2MouseJointDef, target)"
+    OFF_MOUSEJOINTDEF_HERTZ: usize = "offsetof(b2MouseJointDef, hertz)"
+    OFF_MOUSEJOINTDEF_DAMPING_RATIO: usize = "offsetof(b2MouseJointDef, dampingRatio)"
+    OFF_MOUSEJOINTDEF_MAX_FORCE: usize = "offsetof(b2MouseJointDef, maxForce)"
+    OFF_MOUSEJOINTDEF_COLLIDE_CONNECTED: usize = "offsetof(b2MouseJointDef, collideConnected)"
+    OFF_MOUSEJOINTDEF_USER_DATA: usize = "offsetof(b2MouseJointDef, userData)"
+    OFF_MOUSEJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2MouseJointDef, internalValue)"
+
+@assert(sizeof(MouseJointDef) == SIZEOF_MOUSEJOINTDEF, "b2MouseJointDef is not the size box2d says it is")
+@assert(offsetof(MouseJointDef, body_id_a) == OFF_MOUSEJOINTDEF_BODY_ID_A, "b2MouseJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(MouseJointDef, body_id_b) == OFF_MOUSEJOINTDEF_BODY_ID_B, "b2MouseJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(MouseJointDef, target) == OFF_MOUSEJOINTDEF_TARGET, "b2MouseJointDef.target is not where box2d puts it")
+@assert(offsetof(MouseJointDef, hertz) == OFF_MOUSEJOINTDEF_HERTZ, "b2MouseJointDef.hertz is not where box2d puts it")
+@assert(offsetof(MouseJointDef, damping_ratio) == OFF_MOUSEJOINTDEF_DAMPING_RATIO, "b2MouseJointDef.dampingRatio is not where box2d puts it")
+@assert(offsetof(MouseJointDef, max_force) == OFF_MOUSEJOINTDEF_MAX_FORCE, "b2MouseJointDef.maxForce is not where box2d puts it")
+@assert(offsetof(MouseJointDef, collide_connected) == OFF_MOUSEJOINTDEF_COLLIDE_CONNECTED, "b2MouseJointDef.collideConnected is not where box2d puts it")
+@assert(offsetof(MouseJointDef, user_data) == OFF_MOUSEJOINTDEF_USER_DATA, "b2MouseJointDef.userData is not where box2d puts it")
+@assert(offsetof(MouseJointDef, internal_value) == OFF_MOUSEJOINTDEF_INTERNAL_VALUE, "b2MouseJointDef.internalValue is not where box2d puts it")
+
+// `b2FilterJointDef` — 4 fields
+c const
+    SIZEOF_FILTERJOINTDEF: usize = "sizeof(b2FilterJointDef)"
+    OFF_FILTERJOINTDEF_BODY_ID_A: usize = "offsetof(b2FilterJointDef, bodyIdA)"
+    OFF_FILTERJOINTDEF_BODY_ID_B: usize = "offsetof(b2FilterJointDef, bodyIdB)"
+    OFF_FILTERJOINTDEF_USER_DATA: usize = "offsetof(b2FilterJointDef, userData)"
+    OFF_FILTERJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2FilterJointDef, internalValue)"
+
+@assert(sizeof(FilterJointDef) == SIZEOF_FILTERJOINTDEF, "b2FilterJointDef is not the size box2d says it is")
+@assert(offsetof(FilterJointDef, body_id_a) == OFF_FILTERJOINTDEF_BODY_ID_A, "b2FilterJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(FilterJointDef, body_id_b) == OFF_FILTERJOINTDEF_BODY_ID_B, "b2FilterJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(FilterJointDef, user_data) == OFF_FILTERJOINTDEF_USER_DATA, "b2FilterJointDef.userData is not where box2d puts it")
+@assert(offsetof(FilterJointDef, internal_value) == OFF_FILTERJOINTDEF_INTERNAL_VALUE, "b2FilterJointDef.internalValue is not where box2d puts it")
+
+// `b2PrismaticJointDef` — 19 fields
+c const
+    SIZEOF_PRISMATICJOINTDEF: usize = "sizeof(b2PrismaticJointDef)"
+    OFF_PRISMATICJOINTDEF_BODY_ID_A: usize = "offsetof(b2PrismaticJointDef, bodyIdA)"
+    OFF_PRISMATICJOINTDEF_BODY_ID_B: usize = "offsetof(b2PrismaticJointDef, bodyIdB)"
+    OFF_PRISMATICJOINTDEF_LOCAL_ANCHOR_A: usize = "offsetof(b2PrismaticJointDef, localAnchorA)"
+    OFF_PRISMATICJOINTDEF_LOCAL_ANCHOR_B: usize = "offsetof(b2PrismaticJointDef, localAnchorB)"
+    OFF_PRISMATICJOINTDEF_LOCAL_AXIS_A: usize = "offsetof(b2PrismaticJointDef, localAxisA)"
+    OFF_PRISMATICJOINTDEF_REFERENCE_ANGLE: usize = "offsetof(b2PrismaticJointDef, referenceAngle)"
+    OFF_PRISMATICJOINTDEF_TARGET_TRANSLATION: usize = "offsetof(b2PrismaticJointDef, targetTranslation)"
+    OFF_PRISMATICJOINTDEF_ENABLE_SPRING: usize = "offsetof(b2PrismaticJointDef, enableSpring)"
+    OFF_PRISMATICJOINTDEF_HERTZ: usize = "offsetof(b2PrismaticJointDef, hertz)"
+    OFF_PRISMATICJOINTDEF_DAMPING_RATIO: usize = "offsetof(b2PrismaticJointDef, dampingRatio)"
+    OFF_PRISMATICJOINTDEF_ENABLE_LIMIT: usize = "offsetof(b2PrismaticJointDef, enableLimit)"
+    OFF_PRISMATICJOINTDEF_LOWER_TRANSLATION: usize = "offsetof(b2PrismaticJointDef, lowerTranslation)"
+    OFF_PRISMATICJOINTDEF_UPPER_TRANSLATION: usize = "offsetof(b2PrismaticJointDef, upperTranslation)"
+    OFF_PRISMATICJOINTDEF_ENABLE_MOTOR: usize = "offsetof(b2PrismaticJointDef, enableMotor)"
+    OFF_PRISMATICJOINTDEF_MAX_MOTOR_FORCE: usize = "offsetof(b2PrismaticJointDef, maxMotorForce)"
+    OFF_PRISMATICJOINTDEF_MOTOR_SPEED: usize = "offsetof(b2PrismaticJointDef, motorSpeed)"
+    OFF_PRISMATICJOINTDEF_COLLIDE_CONNECTED: usize = "offsetof(b2PrismaticJointDef, collideConnected)"
+    OFF_PRISMATICJOINTDEF_USER_DATA: usize = "offsetof(b2PrismaticJointDef, userData)"
+    OFF_PRISMATICJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2PrismaticJointDef, internalValue)"
+
+@assert(sizeof(PrismaticJointDef) == SIZEOF_PRISMATICJOINTDEF, "b2PrismaticJointDef is not the size box2d says it is")
+@assert(offsetof(PrismaticJointDef, body_id_a) == OFF_PRISMATICJOINTDEF_BODY_ID_A, "b2PrismaticJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, body_id_b) == OFF_PRISMATICJOINTDEF_BODY_ID_B, "b2PrismaticJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, local_anchor_a) == OFF_PRISMATICJOINTDEF_LOCAL_ANCHOR_A, "b2PrismaticJointDef.localAnchorA is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, local_anchor_b) == OFF_PRISMATICJOINTDEF_LOCAL_ANCHOR_B, "b2PrismaticJointDef.localAnchorB is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, local_axis_a) == OFF_PRISMATICJOINTDEF_LOCAL_AXIS_A, "b2PrismaticJointDef.localAxisA is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, reference_angle) == OFF_PRISMATICJOINTDEF_REFERENCE_ANGLE, "b2PrismaticJointDef.referenceAngle is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, target_translation) == OFF_PRISMATICJOINTDEF_TARGET_TRANSLATION, "b2PrismaticJointDef.targetTranslation is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, enable_spring) == OFF_PRISMATICJOINTDEF_ENABLE_SPRING, "b2PrismaticJointDef.enableSpring is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, hertz) == OFF_PRISMATICJOINTDEF_HERTZ, "b2PrismaticJointDef.hertz is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, damping_ratio) == OFF_PRISMATICJOINTDEF_DAMPING_RATIO, "b2PrismaticJointDef.dampingRatio is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, enable_limit) == OFF_PRISMATICJOINTDEF_ENABLE_LIMIT, "b2PrismaticJointDef.enableLimit is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, lower_translation) == OFF_PRISMATICJOINTDEF_LOWER_TRANSLATION, "b2PrismaticJointDef.lowerTranslation is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, upper_translation) == OFF_PRISMATICJOINTDEF_UPPER_TRANSLATION, "b2PrismaticJointDef.upperTranslation is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, enable_motor) == OFF_PRISMATICJOINTDEF_ENABLE_MOTOR, "b2PrismaticJointDef.enableMotor is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, max_motor_force) == OFF_PRISMATICJOINTDEF_MAX_MOTOR_FORCE, "b2PrismaticJointDef.maxMotorForce is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, motor_speed) == OFF_PRISMATICJOINTDEF_MOTOR_SPEED, "b2PrismaticJointDef.motorSpeed is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, collide_connected) == OFF_PRISMATICJOINTDEF_COLLIDE_CONNECTED, "b2PrismaticJointDef.collideConnected is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, user_data) == OFF_PRISMATICJOINTDEF_USER_DATA, "b2PrismaticJointDef.userData is not where box2d puts it")
+@assert(offsetof(PrismaticJointDef, internal_value) == OFF_PRISMATICJOINTDEF_INTERNAL_VALUE, "b2PrismaticJointDef.internalValue is not where box2d puts it")
+
+// `b2RevoluteJointDef` — 19 fields
+c const
+    SIZEOF_REVOLUTEJOINTDEF: usize = "sizeof(b2RevoluteJointDef)"
+    OFF_REVOLUTEJOINTDEF_BODY_ID_A: usize = "offsetof(b2RevoluteJointDef, bodyIdA)"
+    OFF_REVOLUTEJOINTDEF_BODY_ID_B: usize = "offsetof(b2RevoluteJointDef, bodyIdB)"
+    OFF_REVOLUTEJOINTDEF_LOCAL_ANCHOR_A: usize = "offsetof(b2RevoluteJointDef, localAnchorA)"
+    OFF_REVOLUTEJOINTDEF_LOCAL_ANCHOR_B: usize = "offsetof(b2RevoluteJointDef, localAnchorB)"
+    OFF_REVOLUTEJOINTDEF_REFERENCE_ANGLE: usize = "offsetof(b2RevoluteJointDef, referenceAngle)"
+    OFF_REVOLUTEJOINTDEF_TARGET_ANGLE: usize = "offsetof(b2RevoluteJointDef, targetAngle)"
+    OFF_REVOLUTEJOINTDEF_ENABLE_SPRING: usize = "offsetof(b2RevoluteJointDef, enableSpring)"
+    OFF_REVOLUTEJOINTDEF_HERTZ: usize = "offsetof(b2RevoluteJointDef, hertz)"
+    OFF_REVOLUTEJOINTDEF_DAMPING_RATIO: usize = "offsetof(b2RevoluteJointDef, dampingRatio)"
+    OFF_REVOLUTEJOINTDEF_ENABLE_LIMIT: usize = "offsetof(b2RevoluteJointDef, enableLimit)"
+    OFF_REVOLUTEJOINTDEF_LOWER_ANGLE: usize = "offsetof(b2RevoluteJointDef, lowerAngle)"
+    OFF_REVOLUTEJOINTDEF_UPPER_ANGLE: usize = "offsetof(b2RevoluteJointDef, upperAngle)"
+    OFF_REVOLUTEJOINTDEF_ENABLE_MOTOR: usize = "offsetof(b2RevoluteJointDef, enableMotor)"
+    OFF_REVOLUTEJOINTDEF_MAX_MOTOR_TORQUE: usize = "offsetof(b2RevoluteJointDef, maxMotorTorque)"
+    OFF_REVOLUTEJOINTDEF_MOTOR_SPEED: usize = "offsetof(b2RevoluteJointDef, motorSpeed)"
+    OFF_REVOLUTEJOINTDEF_DRAW_SIZE: usize = "offsetof(b2RevoluteJointDef, drawSize)"
+    OFF_REVOLUTEJOINTDEF_COLLIDE_CONNECTED: usize = "offsetof(b2RevoluteJointDef, collideConnected)"
+    OFF_REVOLUTEJOINTDEF_USER_DATA: usize = "offsetof(b2RevoluteJointDef, userData)"
+    OFF_REVOLUTEJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2RevoluteJointDef, internalValue)"
+
+@assert(sizeof(RevoluteJointDef) == SIZEOF_REVOLUTEJOINTDEF, "b2RevoluteJointDef is not the size box2d says it is")
+@assert(offsetof(RevoluteJointDef, body_id_a) == OFF_REVOLUTEJOINTDEF_BODY_ID_A, "b2RevoluteJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, body_id_b) == OFF_REVOLUTEJOINTDEF_BODY_ID_B, "b2RevoluteJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, local_anchor_a) == OFF_REVOLUTEJOINTDEF_LOCAL_ANCHOR_A, "b2RevoluteJointDef.localAnchorA is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, local_anchor_b) == OFF_REVOLUTEJOINTDEF_LOCAL_ANCHOR_B, "b2RevoluteJointDef.localAnchorB is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, reference_angle) == OFF_REVOLUTEJOINTDEF_REFERENCE_ANGLE, "b2RevoluteJointDef.referenceAngle is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, target_angle) == OFF_REVOLUTEJOINTDEF_TARGET_ANGLE, "b2RevoluteJointDef.targetAngle is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, enable_spring) == OFF_REVOLUTEJOINTDEF_ENABLE_SPRING, "b2RevoluteJointDef.enableSpring is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, hertz) == OFF_REVOLUTEJOINTDEF_HERTZ, "b2RevoluteJointDef.hertz is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, damping_ratio) == OFF_REVOLUTEJOINTDEF_DAMPING_RATIO, "b2RevoluteJointDef.dampingRatio is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, enable_limit) == OFF_REVOLUTEJOINTDEF_ENABLE_LIMIT, "b2RevoluteJointDef.enableLimit is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, lower_angle) == OFF_REVOLUTEJOINTDEF_LOWER_ANGLE, "b2RevoluteJointDef.lowerAngle is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, upper_angle) == OFF_REVOLUTEJOINTDEF_UPPER_ANGLE, "b2RevoluteJointDef.upperAngle is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, enable_motor) == OFF_REVOLUTEJOINTDEF_ENABLE_MOTOR, "b2RevoluteJointDef.enableMotor is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, max_motor_torque) == OFF_REVOLUTEJOINTDEF_MAX_MOTOR_TORQUE, "b2RevoluteJointDef.maxMotorTorque is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, motor_speed) == OFF_REVOLUTEJOINTDEF_MOTOR_SPEED, "b2RevoluteJointDef.motorSpeed is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, draw_size) == OFF_REVOLUTEJOINTDEF_DRAW_SIZE, "b2RevoluteJointDef.drawSize is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, collide_connected) == OFF_REVOLUTEJOINTDEF_COLLIDE_CONNECTED, "b2RevoluteJointDef.collideConnected is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, user_data) == OFF_REVOLUTEJOINTDEF_USER_DATA, "b2RevoluteJointDef.userData is not where box2d puts it")
+@assert(offsetof(RevoluteJointDef, internal_value) == OFF_REVOLUTEJOINTDEF_INTERNAL_VALUE, "b2RevoluteJointDef.internalValue is not where box2d puts it")
+
+// `b2WeldJointDef` — 12 fields
+c const
+    SIZEOF_WELDJOINTDEF: usize = "sizeof(b2WeldJointDef)"
+    OFF_WELDJOINTDEF_BODY_ID_A: usize = "offsetof(b2WeldJointDef, bodyIdA)"
+    OFF_WELDJOINTDEF_BODY_ID_B: usize = "offsetof(b2WeldJointDef, bodyIdB)"
+    OFF_WELDJOINTDEF_LOCAL_ANCHOR_A: usize = "offsetof(b2WeldJointDef, localAnchorA)"
+    OFF_WELDJOINTDEF_LOCAL_ANCHOR_B: usize = "offsetof(b2WeldJointDef, localAnchorB)"
+    OFF_WELDJOINTDEF_REFERENCE_ANGLE: usize = "offsetof(b2WeldJointDef, referenceAngle)"
+    OFF_WELDJOINTDEF_LINEAR_HERTZ: usize = "offsetof(b2WeldJointDef, linearHertz)"
+    OFF_WELDJOINTDEF_ANGULAR_HERTZ: usize = "offsetof(b2WeldJointDef, angularHertz)"
+    OFF_WELDJOINTDEF_LINEAR_DAMPING_RATIO: usize = "offsetof(b2WeldJointDef, linearDampingRatio)"
+    OFF_WELDJOINTDEF_ANGULAR_DAMPING_RATIO: usize = "offsetof(b2WeldJointDef, angularDampingRatio)"
+    OFF_WELDJOINTDEF_COLLIDE_CONNECTED: usize = "offsetof(b2WeldJointDef, collideConnected)"
+    OFF_WELDJOINTDEF_USER_DATA: usize = "offsetof(b2WeldJointDef, userData)"
+    OFF_WELDJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2WeldJointDef, internalValue)"
+
+@assert(sizeof(WeldJointDef) == SIZEOF_WELDJOINTDEF, "b2WeldJointDef is not the size box2d says it is")
+@assert(offsetof(WeldJointDef, body_id_a) == OFF_WELDJOINTDEF_BODY_ID_A, "b2WeldJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(WeldJointDef, body_id_b) == OFF_WELDJOINTDEF_BODY_ID_B, "b2WeldJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(WeldJointDef, local_anchor_a) == OFF_WELDJOINTDEF_LOCAL_ANCHOR_A, "b2WeldJointDef.localAnchorA is not where box2d puts it")
+@assert(offsetof(WeldJointDef, local_anchor_b) == OFF_WELDJOINTDEF_LOCAL_ANCHOR_B, "b2WeldJointDef.localAnchorB is not where box2d puts it")
+@assert(offsetof(WeldJointDef, reference_angle) == OFF_WELDJOINTDEF_REFERENCE_ANGLE, "b2WeldJointDef.referenceAngle is not where box2d puts it")
+@assert(offsetof(WeldJointDef, linear_hertz) == OFF_WELDJOINTDEF_LINEAR_HERTZ, "b2WeldJointDef.linearHertz is not where box2d puts it")
+@assert(offsetof(WeldJointDef, angular_hertz) == OFF_WELDJOINTDEF_ANGULAR_HERTZ, "b2WeldJointDef.angularHertz is not where box2d puts it")
+@assert(offsetof(WeldJointDef, linear_damping_ratio) == OFF_WELDJOINTDEF_LINEAR_DAMPING_RATIO, "b2WeldJointDef.linearDampingRatio is not where box2d puts it")
+@assert(offsetof(WeldJointDef, angular_damping_ratio) == OFF_WELDJOINTDEF_ANGULAR_DAMPING_RATIO, "b2WeldJointDef.angularDampingRatio is not where box2d puts it")
+@assert(offsetof(WeldJointDef, collide_connected) == OFF_WELDJOINTDEF_COLLIDE_CONNECTED, "b2WeldJointDef.collideConnected is not where box2d puts it")
+@assert(offsetof(WeldJointDef, user_data) == OFF_WELDJOINTDEF_USER_DATA, "b2WeldJointDef.userData is not where box2d puts it")
+@assert(offsetof(WeldJointDef, internal_value) == OFF_WELDJOINTDEF_INTERNAL_VALUE, "b2WeldJointDef.internalValue is not where box2d puts it")
+
+// `b2WheelJointDef` — 17 fields
+c const
+    SIZEOF_WHEELJOINTDEF: usize = "sizeof(b2WheelJointDef)"
+    OFF_WHEELJOINTDEF_BODY_ID_A: usize = "offsetof(b2WheelJointDef, bodyIdA)"
+    OFF_WHEELJOINTDEF_BODY_ID_B: usize = "offsetof(b2WheelJointDef, bodyIdB)"
+    OFF_WHEELJOINTDEF_LOCAL_ANCHOR_A: usize = "offsetof(b2WheelJointDef, localAnchorA)"
+    OFF_WHEELJOINTDEF_LOCAL_ANCHOR_B: usize = "offsetof(b2WheelJointDef, localAnchorB)"
+    OFF_WHEELJOINTDEF_LOCAL_AXIS_A: usize = "offsetof(b2WheelJointDef, localAxisA)"
+    OFF_WHEELJOINTDEF_ENABLE_SPRING: usize = "offsetof(b2WheelJointDef, enableSpring)"
+    OFF_WHEELJOINTDEF_HERTZ: usize = "offsetof(b2WheelJointDef, hertz)"
+    OFF_WHEELJOINTDEF_DAMPING_RATIO: usize = "offsetof(b2WheelJointDef, dampingRatio)"
+    OFF_WHEELJOINTDEF_ENABLE_LIMIT: usize = "offsetof(b2WheelJointDef, enableLimit)"
+    OFF_WHEELJOINTDEF_LOWER_TRANSLATION: usize = "offsetof(b2WheelJointDef, lowerTranslation)"
+    OFF_WHEELJOINTDEF_UPPER_TRANSLATION: usize = "offsetof(b2WheelJointDef, upperTranslation)"
+    OFF_WHEELJOINTDEF_ENABLE_MOTOR: usize = "offsetof(b2WheelJointDef, enableMotor)"
+    OFF_WHEELJOINTDEF_MAX_MOTOR_TORQUE: usize = "offsetof(b2WheelJointDef, maxMotorTorque)"
+    OFF_WHEELJOINTDEF_MOTOR_SPEED: usize = "offsetof(b2WheelJointDef, motorSpeed)"
+    OFF_WHEELJOINTDEF_COLLIDE_CONNECTED: usize = "offsetof(b2WheelJointDef, collideConnected)"
+    OFF_WHEELJOINTDEF_USER_DATA: usize = "offsetof(b2WheelJointDef, userData)"
+    OFF_WHEELJOINTDEF_INTERNAL_VALUE: usize = "offsetof(b2WheelJointDef, internalValue)"
+
+@assert(sizeof(WheelJointDef) == SIZEOF_WHEELJOINTDEF, "b2WheelJointDef is not the size box2d says it is")
+@assert(offsetof(WheelJointDef, body_id_a) == OFF_WHEELJOINTDEF_BODY_ID_A, "b2WheelJointDef.bodyIdA is not where box2d puts it")
+@assert(offsetof(WheelJointDef, body_id_b) == OFF_WHEELJOINTDEF_BODY_ID_B, "b2WheelJointDef.bodyIdB is not where box2d puts it")
+@assert(offsetof(WheelJointDef, local_anchor_a) == OFF_WHEELJOINTDEF_LOCAL_ANCHOR_A, "b2WheelJointDef.localAnchorA is not where box2d puts it")
+@assert(offsetof(WheelJointDef, local_anchor_b) == OFF_WHEELJOINTDEF_LOCAL_ANCHOR_B, "b2WheelJointDef.localAnchorB is not where box2d puts it")
+@assert(offsetof(WheelJointDef, local_axis_a) == OFF_WHEELJOINTDEF_LOCAL_AXIS_A, "b2WheelJointDef.localAxisA is not where box2d puts it")
+@assert(offsetof(WheelJointDef, enable_spring) == OFF_WHEELJOINTDEF_ENABLE_SPRING, "b2WheelJointDef.enableSpring is not where box2d puts it")
+@assert(offsetof(WheelJointDef, hertz) == OFF_WHEELJOINTDEF_HERTZ, "b2WheelJointDef.hertz is not where box2d puts it")
+@assert(offsetof(WheelJointDef, damping_ratio) == OFF_WHEELJOINTDEF_DAMPING_RATIO, "b2WheelJointDef.dampingRatio is not where box2d puts it")
+@assert(offsetof(WheelJointDef, enable_limit) == OFF_WHEELJOINTDEF_ENABLE_LIMIT, "b2WheelJointDef.enableLimit is not where box2d puts it")
+@assert(offsetof(WheelJointDef, lower_translation) == OFF_WHEELJOINTDEF_LOWER_TRANSLATION, "b2WheelJointDef.lowerTranslation is not where box2d puts it")
+@assert(offsetof(WheelJointDef, upper_translation) == OFF_WHEELJOINTDEF_UPPER_TRANSLATION, "b2WheelJointDef.upperTranslation is not where box2d puts it")
+@assert(offsetof(WheelJointDef, enable_motor) == OFF_WHEELJOINTDEF_ENABLE_MOTOR, "b2WheelJointDef.enableMotor is not where box2d puts it")
+@assert(offsetof(WheelJointDef, max_motor_torque) == OFF_WHEELJOINTDEF_MAX_MOTOR_TORQUE, "b2WheelJointDef.maxMotorTorque is not where box2d puts it")
+@assert(offsetof(WheelJointDef, motor_speed) == OFF_WHEELJOINTDEF_MOTOR_SPEED, "b2WheelJointDef.motorSpeed is not where box2d puts it")
+@assert(offsetof(WheelJointDef, collide_connected) == OFF_WHEELJOINTDEF_COLLIDE_CONNECTED, "b2WheelJointDef.collideConnected is not where box2d puts it")
+@assert(offsetof(WheelJointDef, user_data) == OFF_WHEELJOINTDEF_USER_DATA, "b2WheelJointDef.userData is not where box2d puts it")
+@assert(offsetof(WheelJointDef, internal_value) == OFF_WHEELJOINTDEF_INTERNAL_VALUE, "b2WheelJointDef.internalValue is not where box2d puts it")

@@ -1,0 +1,567 @@
+// Box2D's own types, declared verbatim, and Box2D itself.
+//
+// **Everything that is C lives in this directory** — the thirty-five `.c` files, the headers they
+// include, and the three files of declarations over them. Nothing here is meant to be called by a
+// program: every name and every convention is C's, so a body is a four-field id struct rather than an
+// object, an angle is a cosine and a sine, and a definition is filled in by asking the library for
+// its defaults and then overwriting fields. The module above this one turns those into sysl and is
+// what an application imports.
+//
+// The split keeps two jobs apart. This one has to be **faithful** — a signature that disagrees with
+// the header links perfectly and corrupts the call at run time — and the other has to be
+// **pleasant**, which is a different question and would otherwise be answered in the same breath.
+//
+// ## What is unusual here: nothing checks a binding, so this one is checked
+//
+// Every other binding in the org rests on a promise that a transcribed struct matches the header.
+// Box2D passes **thirty-one different structs by value**, and a field in the wrong place links
+// perfectly and reads garbage, so a promise is not good enough. `layout.sysl` beside this file asks
+// the C compiler for the size of every one of these types and the offset of every field, and
+// `@assert`s each against what sysl laid out. A disagreement is a **compile error naming the
+// field**, on the target being built for, and it costs nothing at run time.
+//
+// That is `15 §7`'s complaint about a transcribed constant — *"correct on one machine, and nothing
+// checks it"* — answered for a layout rather than for a number.
+
+module sh.sysl.box2d.c
+
+// Box2D reaches `remainderf`, which is in libm on Linux and in libSystem on macOS. Naming it is
+// portable in the way `15 §8` requires: it is a library rather than a flag, and the target decides
+// what the flag for it is.
+@link("m")
+
+// `offsetof` is a macro from `stddef.h`, and `layout.sysl` is written in terms of it. Box2D's own
+// header does not include it — nothing in the public surface needs it — so the probe translation
+// unit is told to.
+@include("stddef.h")
+@include("box2d/box2d.h")
+
+// ## The numbers, asked for rather than written down
+//
+// Each of these is what the C compiler computes for Box2D's own name, out of the headers beside this
+// file, on the target being built. Free here, because those headers are vendored and so need no
+// include path and no `requires { headers }`.
+
+c const
+    // `b2BodyType`
+    STATIC_BODY:    i32 = "b2_staticBody"
+    KINEMATIC_BODY: i32 = "b2_kinematicBody"
+    DYNAMIC_BODY:   i32 = "b2_dynamicBody"
+
+    // `b2ShapeType`
+    CIRCLE_SHAPE:        i32 = "b2_circleShape"
+    CAPSULE_SHAPE:       i32 = "b2_capsuleShape"
+    SEGMENT_SHAPE:       i32 = "b2_segmentShape"
+    POLYGON_SHAPE:       i32 = "b2_polygonShape"
+    CHAIN_SEGMENT_SHAPE: i32 = "b2_chainSegmentShape"
+
+    // `b2JointType`
+    DISTANCE_JOINT:  i32 = "b2_distanceJoint"
+    FILTER_JOINT:    i32 = "b2_filterJoint"
+    MOTOR_JOINT:     i32 = "b2_motorJoint"
+    MOUSE_JOINT:     i32 = "b2_mouseJoint"
+    PRISMATIC_JOINT: i32 = "b2_prismaticJoint"
+    REVOLUTE_JOINT:  i32 = "b2_revoluteJoint"
+    WELD_JOINT:      i32 = "b2_weldJoint"
+    WHEEL_JOINT:     i32 = "b2_wheelJoint"
+
+    // The filtering defaults, which a hand-written definition has to reproduce exactly or else
+    // silently collide with nothing. `DEFAULT_MASK_BITS` is `UINT64_MAX`, which is the case
+    // `00-types-and-expressions.md` says cannot be written as a bare literal at all.
+    DEFAULT_CATEGORY_BITS: u64 = "B2_DEFAULT_CATEGORY_BITS"
+    DEFAULT_MASK_BITS:     u64 = "B2_DEFAULT_MASK_BITS"
+
+    // A polygon's vertex array is this long, and so is a hull's and a shape proxy's. It sizes the
+    // three arrays below, which is what makes it a constant rather than an eight somebody typed.
+    MAX_POLYGON_VERTICES: usize = "B2_MAX_POLYGON_VERTICES"
+
+    // A float, which `0138` made reachable in 0.0.55 — before it, this was a number transcribed out
+    // of the header with nothing comparing the two.
+    //
+    // **It is the only float macro Box2D publishes.** `B2_AABB_MARGIN_FRACTION`, `B2_TIME_TO_SLEEP`
+    // and `B2_MAX_ROTATION` are in `src/constants.h`, which is Box2D's internals rather than its
+    // interface and is not reachable from the public header — the probe is a translation unit that
+    // *includes* what `@include` names, so a macro the interface does not define is one it cannot
+    // measure. Same shape as `qoi`'s constants inside `QOI_IMPLEMENTATION`. Nothing in the module
+    // above needs them; they are tuning the solver reads for itself.
+    PI: f32 = "B2_PI"
+
+// ## The math types
+//
+// Box2D's rotations are a cosine and a sine rather than an angle, which is what makes composing two
+// of them a multiplication and keeps a stored rotation from drifting the way a repeatedly-normalised
+// angle does. The module above wraps all four; nothing here has a method.
+
+struct Vec2
+    x: f32
+    y: f32
+
+struct CosSin
+    cosine: f32
+    sine: f32
+
+struct Rot
+    c: f32
+    s: f32
+
+struct Transform
+    p: Vec2
+    q: Rot
+
+struct Mat22
+    cx: Vec2
+    cy: Vec2
+
+struct AABB
+    lower_bound: Vec2
+    upper_bound: Vec2
+
+struct Plane
+    normal: Vec2
+    offset: f32
+
+// ## The ids
+//
+// **These are values, not pointers, and that is why there is no `opaque struct` in this binding.**
+// Every other package in the org hides a handle behind `opaque struct` because the handle *is* a
+// pointer and a caller has no business reading it. A Box2D id is an index and a generation counter
+// passed by value — the generation is what makes a stale id detectable rather than a crash — so
+// declaring it opaque would be a lie about what it is, and would also stop it crossing to C at all,
+// since `15 §9` withholds exactly the size a by-value parameter needs.
+//
+// A zeroed id is null, which is what `is_null` in the module above reads.
+
+struct WorldId
+    index1: u16
+    generation: u16
+
+struct BodyId
+    index1: i32
+    world0: u16
+    generation: u16
+
+struct ShapeId
+    index1: i32
+    world0: u16
+    generation: u16
+
+struct ChainId
+    index1: i32
+    world0: u16
+    generation: u16
+
+struct JointId
+    index1: i32
+    world0: u16
+    generation: u16
+
+struct Version
+    major: i32
+    minor: i32
+    revision: i32
+
+// ## The shapes
+//
+// Four solid shapes and the convex hull a polygon is built from. A polygon is a fixed 144 bytes
+// whatever its vertex count, which is why it is passed and returned by value everywhere: Box2D never
+// allocates one.
+
+struct Circle
+    center: Vec2
+    radius: f32
+
+struct Capsule
+    center1: Vec2
+    center2: Vec2
+    radius: f32
+
+struct Segment
+    point1: Vec2
+    point2: Vec2
+
+struct Polygon
+    vertices: [MAX_POLYGON_VERTICES]Vec2
+    normals: [MAX_POLYGON_VERTICES]Vec2
+    centroid: Vec2
+    radius: f32
+    count: i32
+
+struct ChainSegment
+    ghost1: Vec2
+    segment: Segment
+    ghost2: Vec2
+    chain_id: i32
+
+struct Hull
+    points: [MAX_POLYGON_VERTICES]Vec2
+    count: i32
+
+struct MassData
+    mass: f32
+    center: Vec2
+    rotational_inertia: f32
+
+// ## Casting and queries
+
+struct RayCastInput
+    origin: Vec2
+    translation: Vec2
+    max_fraction: f32
+
+struct ShapeProxy
+    points: [MAX_POLYGON_VERTICES]Vec2
+    count: i32
+    radius: f32
+
+struct ShapeCastInput
+    proxy: ShapeProxy
+    translation: Vec2
+    max_fraction: f32
+    can_encroach: bool
+
+struct CastOutput
+    normal: Vec2
+    point: Vec2
+    fraction: f32
+    iterations: i32
+    hit: bool
+
+struct RayResult
+    shape_id: ShapeId
+    point: Vec2
+    normal: Vec2
+    fraction: f32
+    node_visits: i32
+    leaf_visits: i32
+    hit: bool
+
+struct TreeStats
+    node_visits: i32
+    leaf_visits: i32
+
+struct PlaneResult
+    plane: Plane
+    point: Vec2
+    hit: bool
+
+// ## Contact manifolds
+//
+// Two shapes touch at up to two points, and a manifold is what the solver was told about them. It
+// arrives in a begin-touch event with every impulse zero, because it is recorded before the solver
+// runs.
+
+struct ManifoldPoint
+    point: Vec2
+    anchor_a: Vec2
+    anchor_b: Vec2
+    separation: f32
+    normal_impulse: f32
+    tangent_impulse: f32
+    total_normal_impulse: f32
+    normal_velocity: f32
+    id: u16
+    persisted: bool
+
+struct Manifold
+    normal: Vec2
+    rolling_impulse: f32
+    points: [2]ManifoldPoint
+    point_count: i32
+
+// ## Filtering
+//
+// A shape carries the categories it belongs to and the categories it will collide with; a query
+// carries the same pair. `group_index` overrides both — negative never collides, positive always
+// does — which is how a ragdoll avoids colliding with itself.
+
+struct Filter
+    category_bits: u64
+    mask_bits: u64
+    group_index: i32
+
+struct QueryFilter
+    category_bits: u64
+    mask_bits: u64
+
+struct SurfaceMaterial
+    friction: f32
+    restitution: f32
+    rolling_resistance: f32
+    tangent_speed: f32
+    user_material_id: i32
+    custom_color: u32
+
+// ## The definitions
+//
+// **Every one of these carries an `internal_value` that must not be set by hand**, and that is the
+// mechanism forcing the shape the module above takes: a definition is obtained from Box2D's own
+// `default_*` and then edited. Box2D checks the field when the definition is handed back and traps
+// if it is wrong, which is a real guard against a struct that has grown a field since the caller was
+// compiled.
+//
+// The two callback slots in a world definition are `*extern` function pointers, which a sysl
+// function can fill in directly since 0.0.55 — see `0136` and `0137`. Nothing here needs a C
+// trampoline.
+
+struct WorldDef
+    gravity: Vec2
+    restitution_threshold: f32
+    hit_event_threshold: f32
+    contact_hertz: f32
+    contact_damping_ratio: f32
+    max_contact_push_speed: f32
+    maximum_linear_speed: f32
+    friction_callback: *extern(f32, i32, f32, i32) -> f32
+    restitution_callback: *extern(f32, i32, f32, i32) -> f32
+    enable_sleep: bool
+    enable_continuous: bool
+    worker_count: i32
+    enqueue_task: *u8
+    finish_task: *u8
+    user_task_context: *u8
+    user_data: *u8
+    internal_value: i32
+
+struct BodyDef
+    kind: i32
+    position: Vec2
+    rotation: Rot
+    linear_velocity: Vec2
+    angular_velocity: f32
+    linear_damping: f32
+    angular_damping: f32
+    gravity_scale: f32
+    sleep_threshold: f32
+    name: *u8
+    user_data: *u8
+    enable_sleep: bool
+    is_awake: bool
+    fixed_rotation: bool
+    is_bullet: bool
+    is_enabled: bool
+    allow_fast_rotation: bool
+    internal_value: i32
+
+struct ShapeDef
+    user_data: *u8
+    material: SurfaceMaterial
+    density: f32
+    filter: Filter
+    is_sensor: bool
+    enable_sensor_events: bool
+    enable_contact_events: bool
+    enable_hit_events: bool
+    enable_pre_solve_events: bool
+    invoke_contact_creation: bool
+    update_body_mass: bool
+    internal_value: i32
+
+struct ChainDef
+    user_data: *u8
+    points: *Vec2
+    count: i32
+    materials: *SurfaceMaterial
+    material_count: i32
+    filter: Filter
+    is_loop: bool
+    enable_sensor_events: bool
+    internal_value: i32
+
+struct ExplosionDef
+    mask_bits: u64
+    position: Vec2
+    radius: f32
+    falloff: f32
+    impulse_per_length: f32
+
+// ## The events
+//
+// **This is why Box2D needs almost no callbacks.** Contacts, sensor overlaps and body movement are
+// reported as arrays owned by the world and read after the step, rather than through a function the
+// solver calls from a worker thread. Only queries, custom filtering, pre-solve and debug draw are
+// genuinely callback-shaped.
+//
+// Each array is valid until the next step, and the ids in it may name things that have since been
+// destroyed — an end-touch event fires precisely because something went away — so the module above
+// hands back a slice and says so.
+
+struct SensorBeginTouchEvent
+    sensor_shape_id: ShapeId
+    visitor_shape_id: ShapeId
+
+struct SensorEndTouchEvent
+    sensor_shape_id: ShapeId
+    visitor_shape_id: ShapeId
+
+struct SensorEvents
+    begin_events: *SensorBeginTouchEvent
+    end_events: *SensorEndTouchEvent
+    begin_count: i32
+    end_count: i32
+
+struct ContactBeginTouchEvent
+    shape_id_a: ShapeId
+    shape_id_b: ShapeId
+    manifold: Manifold
+
+struct ContactEndTouchEvent
+    shape_id_a: ShapeId
+    shape_id_b: ShapeId
+
+struct ContactHitEvent
+    shape_id_a: ShapeId
+    shape_id_b: ShapeId
+    point: Vec2
+    normal: Vec2
+    approach_speed: f32
+
+struct ContactEvents
+    begin_events: *ContactBeginTouchEvent
+    end_events: *ContactEndTouchEvent
+    hit_events: *ContactHitEvent
+    begin_count: i32
+    end_count: i32
+    hit_count: i32
+
+struct BodyMoveEvent
+    transform: Transform
+    body_id: BodyId
+    user_data: *u8
+    fell_asleep: bool
+
+struct BodyEvents
+    move_events: *BodyMoveEvent
+    move_count: i32
+
+struct ContactData
+    shape_id_a: ShapeId
+    shape_id_b: ShapeId
+    manifold: Manifold
+
+// ## The joint definitions
+//
+// Eight joint types share one `JointId`, so `joint_get_type` is what tells them apart. Each
+// definition follows the same rule as the three above: ask for the default, edit, hand back.
+
+struct DistanceJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    local_anchor_a: Vec2
+    local_anchor_b: Vec2
+    length: f32
+    enable_spring: bool
+    hertz: f32
+    damping_ratio: f32
+    enable_limit: bool
+    min_length: f32
+    max_length: f32
+    enable_motor: bool
+    max_motor_force: f32
+    motor_speed: f32
+    collide_connected: bool
+    user_data: *u8
+    internal_value: i32
+
+struct MotorJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    linear_offset: Vec2
+    angular_offset: f32
+    max_force: f32
+    max_torque: f32
+    correction_factor: f32
+    collide_connected: bool
+    user_data: *u8
+    internal_value: i32
+
+struct MouseJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    target: Vec2
+    hertz: f32
+    damping_ratio: f32
+    max_force: f32
+    collide_connected: bool
+    user_data: *u8
+    internal_value: i32
+
+struct FilterJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    user_data: *u8
+    internal_value: i32
+
+struct PrismaticJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    local_anchor_a: Vec2
+    local_anchor_b: Vec2
+    local_axis_a: Vec2
+    reference_angle: f32
+    target_translation: f32
+    enable_spring: bool
+    hertz: f32
+    damping_ratio: f32
+    enable_limit: bool
+    lower_translation: f32
+    upper_translation: f32
+    enable_motor: bool
+    max_motor_force: f32
+    motor_speed: f32
+    collide_connected: bool
+    user_data: *u8
+    internal_value: i32
+
+struct RevoluteJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    local_anchor_a: Vec2
+    local_anchor_b: Vec2
+    reference_angle: f32
+    target_angle: f32
+    enable_spring: bool
+    hertz: f32
+    damping_ratio: f32
+    enable_limit: bool
+    lower_angle: f32
+    upper_angle: f32
+    enable_motor: bool
+    max_motor_torque: f32
+    motor_speed: f32
+    draw_size: f32
+    collide_connected: bool
+    user_data: *u8
+    internal_value: i32
+
+struct WeldJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    local_anchor_a: Vec2
+    local_anchor_b: Vec2
+    reference_angle: f32
+    linear_hertz: f32
+    angular_hertz: f32
+    linear_damping_ratio: f32
+    angular_damping_ratio: f32
+    collide_connected: bool
+    user_data: *u8
+    internal_value: i32
+
+struct WheelJointDef
+    body_id_a: BodyId
+    body_id_b: BodyId
+    local_anchor_a: Vec2
+    local_anchor_b: Vec2
+    local_axis_a: Vec2
+    enable_spring: bool
+    hertz: f32
+    damping_ratio: f32
+    enable_limit: bool
+    lower_translation: f32
+    upper_translation: f32
+    enable_motor: bool
+    max_motor_torque: f32
+    motor_speed: f32
+    collide_connected: bool
+    user_data: *u8
+    internal_value: i32

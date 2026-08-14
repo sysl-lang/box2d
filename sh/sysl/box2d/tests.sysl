@@ -1,0 +1,17 @@
+module sh.sysl.box2d
+@tests
+
+import sh.sysl.box2d.c
+
+@test("the vendored library is the version this package was written against")
+version_is_pinned()
+    val v = c.version()
+
+    assert_eq(v.major, 3)
+    assert_eq(v.minor, 1)
+end version_is_pinned
+
+@test("a struct by value crosses in both directions")
+vec2_crosses()
+    assert(c.is_valid_vec2(c.Vec2(3.0, 4.0)))
+end vec2_crosses
