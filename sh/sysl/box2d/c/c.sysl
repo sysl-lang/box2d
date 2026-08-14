@@ -86,39 +86,22 @@ c const
     // above needs them; they are tuning the solver reads for itself.
     PI: f32 = "B2_PI"
 
-// ## The math types
+// ## The math types are not here — they are `sh.sysl.box2d.math`'s
 //
-// Box2D's rotations are a cosine and a sine rather than an angle, which is what makes composing two
-// of them a multiplication and keeps a stored rotation from drifting the way a repeatedly-normalised
-// angle does. The module above wraps all four; nothing here has a method.
+// `Vec2`, `Rot`, `Transform`, `AABB`, `Plane`, `CosSin` and `Mat22` are declared one module down and
+// imported here, which is the one place this binding's layering runs the other way. The reason is
+// `08 §2` and `14 §5` between them: a method lives in its type's body and an `impl` in the module
+// declaring the type, so `impl Add for Vec2` can only sit where `Vec2` is declared — and Box2D's
+// seventy-nine `static inline` math functions are worth having as sysl operators rather than as
+// seventy-nine shims. `13 §6` then forbids the obvious arrangement, since this module needs `Vec2`
+// in three hundred signatures and could not import the module above it. Declaring them below both
+// is what satisfies everything at once.
+//
+// **They are still checked here.** `layout.sysl` measures them against `b2Vec2` and the rest exactly
+// as it measures the types declared in this file; where a type is declared has nothing to do with
+// whether its layout is right.
 
-struct Vec2
-    x: f32
-    y: f32
-
-struct CosSin
-    cosine: f32
-    sine: f32
-
-struct Rot
-    c: f32
-    s: f32
-
-struct Transform
-    p: Vec2
-    q: Rot
-
-struct Mat22
-    cx: Vec2
-    cy: Vec2
-
-struct AABB
-    lower_bound: Vec2
-    upper_bound: Vec2
-
-struct Plane
-    normal: Vec2
-    offset: f32
+import sh.sysl.box2d.math.{Vec2, CosSin, Rot, Transform, Mat22, AABB, Plane}
 
 // ## The ids
 //

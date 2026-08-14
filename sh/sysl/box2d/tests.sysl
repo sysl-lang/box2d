@@ -1,17 +1,565 @@
+// What the binding claims, measured against the real library.
+//
+// A binding can be wrong in a way that compiles, links and returns without complaint, so most of
+// what follows runs a simulation and reads a number back out of it. Where a claim is about a
+// *layout* rather than about a value, `c/layout.sysl` has already made it at compile time and there
+// is nothing left for a test to do.
+
 module sh.sysl.box2d
 @tests
 
 import sh.sysl.box2d.c
+import sh.sysl.box2d.math.{Vec2, Rot, Transform, AABB, zero, identity, rot, cos_sin, atan2}
+import sysl.math.Float
+
+// -- the library itself ---------------------------------------------------------------------------
 
 @test("the vendored library is the version this package was written against")
 version_is_pinned()
-    val v = c.version()
+    val major, minor, _ = version()
 
-    assert_eq(v.major, 3)
-    assert_eq(v.minor, 1)
+    assert_eq(major, 3)
+    assert_eq(minor, 1)
 end version_is_pinned
 
-@test("a struct by value crosses in both directions")
-vec2_crosses()
-    assert(c.is_valid_vec2(c.Vec2(3.0, 4.0)))
-end vec2_crosses
+// -- vectors --------------------------------------------------------------------------------------
+
+@test("the operators are the arithmetic they look like")
+vector_arithmetic()
+    val a = Vec2(3.0, 4.0)
+    val b = Vec2(1.0, 2.0)
+
+    assert_eq(a + b, Vec2(4.0, 6.0))
+    assert_eq(a - b, Vec2(2.0, 2.0))
+    assert_eq(-a, Vec2(-3.0, -4.0))
+    assert_eq(a * 2.0, Vec2(6.0, 8.0))
+    assert_eq(a.length(), 5.0)
+    assert_eq(a.length_squared(), 25.0)
+    assert_eq(a.dot(b), 11.0)
+    assert_eq(a.cross(b), 2.0)
+end vector_arithmetic
+
+@test("normalizing a vector gives a unit vector, and zero has no direction to keep")
+vector_normalize()
+    assert_eq(Vec2(3.0, 4.0).normalize(), Vec2(0.6, 0.8))
+    assert_eq(zero().normalize(), zero())
+    assert(Vec2(3.0, 4.0).normalize().is_normalized())
+end vector_normalize
+
+@test("the perpendiculars turn a quarter circle each way")
+vector_perpendiculars()
+    assert_eq(Vec2(1.0, 0.0).left_perp(), Vec2(0.0, 1.0))
+    assert_eq(Vec2(1.0, 0.0).right_perp(), Vec2(0.0, -1.0))
+end vector_perpendiculars
+
+// -- rotations ------------------------------------------------------------------------------------
+//
+// **These are the tests that make `math.sysl` a port rather than a rewrite.** Its `cos_sin` and
+// `atan2` are Box2D's polynomials written in sysl, and the claim that they are the *same*
+// polynomials is only worth anything if it is measured against the library's own.
+
+@test("cos_sin agrees with the library exactly, across the circle")
+cos_sin_matches_the_library()
+    for i in 0..<73
+        val angle = f32(i - 36) * 0.25
+        val mine = cos_sin(angle)
+        val theirs = c.compute_cos_sin(angle)
+
+        assert_eq(mine.cosine, theirs.cosine)
+        assert_eq(mine.sine, theirs.sine)
+end cos_sin_matches_the_library
+
+@test("atan2 agrees with the library exactly, in all four quadrants")
+atan2_matches_the_library()
+    for i in 0..<17
+        for j in 0..<17
+            val y = f32(i - 8) * 0.5
+            val x = f32(j - 8) * 0.5
+
+            assert_eq(atan2(y, x), c.atan2(y, x))
+end atan2_matches_the_library
+
+@test("an angle survives the trip out to a rotation and back")
+rotation_round_trip()
+    val q = rot(0.75)
+
+    assert(q.is_normalized())
+    assert((q.angle() - 0.75).abs() < 0.001)
+end rotation_round_trip
+
+// **The tolerance here is the honest cost of Box2D's approximations**, and it is worth writing down
+// rather than tuning until it passes. `rot` is a rational approximation good to about four decimal
+// places and `angle` is a polynomial good to about 0.0002 radians, so a value that has been through
+// two of the first and one of the second lands 0.0026 off — measured, not guessed. A simulation does
+// not care, because it never converts: it composes rotations and rotates vectors, both of which are
+// exact given whatever the rotation is. Converting to and from an angle is the lossy part, which is
+// the argument for storing a cosine and a sine in the first place.
+@test("composing two rotations adds their angles, to the accuracy the approximation allows")
+rotation_composition()
+    val a = rot(0.4)
+    val b = rot(0.3)
+
+    assert(((a * b).angle() - 0.7).abs() < 0.005)
+end rotation_composition
+
+@test("rotating a vector by a quarter turn is the left perpendicular")
+rotation_rotates()
+    val q = rot(f32(c.PI) * 0.5)
+    val v = q.rotate(Vec2(1.0, 0.0))
+
+    assert(v.x.abs() < 0.001)
+    assert((v.y - 1.0).abs() < 0.001)
+end rotation_rotates
+
+@test("inverse rotation undoes rotation")
+rotation_inverse()
+    val q = rot(1.1)
+    val v = Vec2(2.0, -3.0)
+
+    assert(q.inv_rotate(q.rotate(v)).distance(v) < 0.001)
+end rotation_inverse
+
+@test("a transform takes a point between frames and back")
+transform_round_trip()
+    val t = Transform(Vec2(5.0, -2.0), rot(0.6))
+    val p = Vec2(1.5, 0.25)
+
+    assert(t.invert(t.apply(p)).distance(p) < 0.001)
+end transform_round_trip
+
+// -- bounding boxes -------------------------------------------------------------------------------
+
+@test("a box knows its centre, its size and what it holds")
+aabb_geometry()
+    val a = AABB(Vec2(-1.0, -2.0), Vec2(3.0, 4.0))
+
+    assert_eq(a.center(), Vec2(1.0, 1.0))
+    assert_eq(a.width(), 4.0)
+    assert_eq(a.height(), 6.0)
+    assert(a.contains_point(Vec2(0.0, 0.0)))
+    assert(!a.contains_point(Vec2(9.0, 0.0)))
+    assert(a.overlaps(AABB(Vec2(2.0, 2.0), Vec2(8.0, 8.0))))
+    assert(!a.overlaps(AABB(Vec2(4.0, 4.0), Vec2(8.0, 8.0))))
+    assert(a.is_valid())
+end aabb_geometry
+
+// -- the defaults, which are the one thing this package transcribes -------------------------------
+
+@test("body_def with no arguments is Box2D's own default, field for field")
+body_def_matches_the_library()
+    val mine = body_def()
+    val theirs = c.default_body_def()
+
+    assert_eq(mine.kind, theirs.kind)
+    assert_eq(mine.position, theirs.position)
+    assert_eq(mine.rotation, theirs.rotation)
+    assert_eq(mine.linear_velocity, theirs.linear_velocity)
+    assert_eq(mine.angular_velocity, theirs.angular_velocity)
+    assert_eq(mine.linear_damping, theirs.linear_damping)
+    assert_eq(mine.angular_damping, theirs.angular_damping)
+    assert_eq(mine.gravity_scale, theirs.gravity_scale)
+    assert_eq(mine.sleep_threshold, theirs.sleep_threshold)
+    assert_eq(mine.enable_sleep, theirs.enable_sleep)
+    assert_eq(mine.is_awake, theirs.is_awake)
+    assert_eq(mine.fixed_rotation, theirs.fixed_rotation)
+    assert_eq(mine.is_bullet, theirs.is_bullet)
+    assert_eq(mine.is_enabled, theirs.is_enabled)
+end body_def_matches_the_library
+
+@test("shape_def with no arguments is Box2D's own default, field for field")
+shape_def_matches_the_library()
+    val mine = shape_def()
+    val theirs = c.default_shape_def()
+
+    assert_eq(mine.density, theirs.density)
+    assert_eq(mine.material.friction, theirs.material.friction)
+    assert_eq(mine.material.restitution, theirs.material.restitution)
+    assert_eq(mine.material.rolling_resistance, theirs.material.rolling_resistance)
+    assert_eq(mine.material.tangent_speed, theirs.material.tangent_speed)
+    assert_eq(mine.filter.category_bits, theirs.filter.category_bits)
+    assert_eq(mine.filter.mask_bits, theirs.filter.mask_bits)
+    assert_eq(mine.is_sensor, theirs.is_sensor)
+    assert_eq(mine.enable_contact_events, theirs.enable_contact_events)
+    assert_eq(mine.enable_hit_events, theirs.enable_hit_events)
+    assert_eq(mine.enable_pre_solve_events, theirs.enable_pre_solve_events)
+end shape_def_matches_the_library
+
+@test("world() with no arguments is Box2D's own default, for the fields it sets")
+world_def_matches_the_library()
+    val theirs = c.default_world_def()
+    val w = world()
+
+    assert_eq(w.gravity(), theirs.gravity)
+    assert_eq(w.restitution_threshold(), theirs.restitution_threshold)
+    assert_eq(w.hit_event_threshold(), theirs.hit_event_threshold)
+    assert_eq(w.maximum_linear_speed(), theirs.maximum_linear_speed)
+    assert_eq(w.sleeping_enabled(), theirs.enable_sleep)
+    assert_eq(w.continuous_enabled(), theirs.enable_continuous)
+end world_def_matches_the_library
+
+@test("filter() with no arguments is Box2D's own default")
+filter_matches_the_library()
+    val mine = filter()
+    val theirs = c.default_filter()
+
+    assert_eq(mine.category_bits, theirs.category_bits)
+    assert_eq(mine.mask_bits, theirs.mask_bits)
+    assert_eq(mine.group_index, theirs.group_index)
+end filter_matches_the_library
+
+// -- the simulation -------------------------------------------------------------------------------
+
+@test("a world starts with the gravity it was given")
+world_has_its_gravity()
+    val w = world(gravity = Vec2(0.0, -20.0))
+
+    assert_eq(w.gravity(), Vec2(0.0, -20.0))
+    assert(w.is_valid())
+end world_has_its_gravity
+
+@test("a static body does not fall and a dynamic one does")
+gravity_moves_only_dynamic_bodies()
+    val w = world()
+
+    val fixed = w.body(body_def(position = Vec2(0.0, 5.0)))
+    val falling = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 5.0)))
+
+    falling.circle(shape_def(), circle(zero(), 0.5))
+
+    for _ in 0..<30
+        w.step(1.0 / 60.0)
+
+    assert_eq(fixed.position().y, 5.0)
+    assert(falling.position().y < 4.9)
+end gravity_moves_only_dynamic_bodies
+
+@test("a ball dropped on the ground comes to rest on top of it")
+a_ball_lands_on_the_ground()
+    val w = world()
+
+    val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
+
+    ground.polygon(shape_def(), make_box(50.0, 1.0))
+
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 6.0)))
+
+    ball.circle(shape_def(density = 1.0, friction = 0.3), circle(zero(), 0.5))
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+
+    // The ground's top is at y = 0 and the ball's radius is 0.5, so it settles at 0.5 — within the
+    // slop Box2D allows a resting contact to overlap by.
+    assert((ball.position().y - 0.5).abs() < 0.02)
+    assert(ball.position().x.abs() < 0.01)
+end a_ball_lands_on_the_ground
+
+@test("a body's mass comes from the shapes on it")
+mass_comes_from_the_shapes()
+    val w = world()
+    val b = w.body(body_def(kind = BodyKind.Dynamic))
+
+    assert_eq(b.mass(), 0.0)
+
+    b.polygon(shape_def(density = 2.0), make_box(1.0, 1.0))
+
+    // Two by two metres at two kilograms per square metre.
+    assert((b.mass() - 8.0).abs() < 0.001)
+    assert_eq(b.shape_count(), 1)
+end mass_comes_from_the_shapes
+
+@test("an impulse moves a body at the speed the arithmetic says")
+an_impulse_sets_a_velocity()
+    val w = world(gravity = zero())
+    val b = w.body(body_def(kind = BodyKind.Dynamic))
+
+    b.polygon(shape_def(density = 1.0), make_box(0.5, 0.5))
+
+    // A one-by-one box of density 1 weighs one kilogram, so a three newton-second impulse leaves it
+    // at three metres per second.
+    b.apply_linear_impulse_to_center(Vec2(3.0, 0.0))
+    w.step(1.0 / 60.0)
+
+    assert((b.linear_velocity().x - 3.0).abs() < 0.001)
+end an_impulse_sets_a_velocity
+
+@test("a body reports the kind it was made with")
+a_body_knows_its_kind()
+    val w = world()
+
+    assert_eq(w.body(body_def()).kind(), BodyKind.Static)
+    assert_eq(w.body(body_def(kind = BodyKind.Dynamic)).kind(), BodyKind.Dynamic)
+    assert_eq(w.body(body_def(kind = BodyKind.Kinematic)).kind(), BodyKind.Kinematic)
+end a_body_knows_its_kind
+
+@test("a shape reports the geometry it was made with")
+a_shape_knows_its_kind()
+    val w = world()
+    val b = w.body(body_def())
+
+    assert_eq(b.circle(shape_def(), circle(zero(), 1.0)).kind(), ShapeKind.Circle)
+    assert_eq(b.capsule(shape_def(), capsule(zero(), Vec2(1.0, 0.0), 0.25)).kind(), ShapeKind.Capsule)
+    assert_eq(b.segment(shape_def(), segment(zero(), Vec2(1.0, 0.0))).kind(), ShapeKind.Segment)
+    assert_eq(b.polygon(shape_def(), make_box(1.0, 1.0)).kind(), ShapeKind.Polygon)
+    assert_eq(b.shape_count(), 4)
+end a_shape_knows_its_kind
+
+@test("the shapes on a body can be walked")
+shapes_can_be_walked()
+    val w = world()
+    val b = w.body(body_def())
+
+    b.circle(shape_def(), circle(zero(), 1.0))
+    b.polygon(shape_def(), make_box(1.0, 1.0))
+
+    val found = b.shapes()
+
+    assert_eq(found.len, 2)
+    assert_eq(found[0].body(), b)
+    assert_eq(found[1].body(), b)
+end shapes_can_be_walked
+
+@test("a shape's properties are the ones it was given")
+shape_properties_survive()
+    val w = world()
+    val b = w.body(body_def())
+    val s = b.circle(shape_def(density = 3.0, friction = 0.25, restitution = 0.75), circle(zero(), 1.0))
+
+    assert_eq(s.density(), 3.0)
+    assert_eq(s.friction(), 0.25)
+    assert_eq(s.restitution(), 0.75)
+    assert(!s.is_sensor())
+end shape_properties_survive
+
+@test("a point is inside a shape or it is not")
+test_point_answers()
+    val w = world()
+    val b = w.body(body_def())
+    val s = b.circle(shape_def(), circle(zero(), 1.0))
+
+    assert(s.test_point(Vec2(0.5, 0.0)))
+    assert(!s.test_point(Vec2(2.0, 0.0)))
+end test_point_answers
+
+@test("a bounding box holds the shape that made it")
+a_shape_has_a_box()
+    val w = world()
+    val b = w.body(body_def(position = Vec2(10.0, 0.0)))
+    val s = b.circle(shape_def(), circle(zero(), 1.0))
+    val box = s.aabb()
+
+    assert(box.contains_point(Vec2(10.0, 0.0)))
+    assert(box.width() >= 2.0)
+end a_shape_has_a_box
+
+@test("a bouncy ball bounces and a dead one does not")
+restitution_bounces()
+    val bounced = drop_height(0.9)
+    val dead = drop_height(0.0)
+
+    assert(bounced > dead + 0.5)
+end restitution_bounces
+
+// How high a ball dropped from four metres gets back to, with a given restitution. The two runs it
+// is called for differ in one number, which is what makes the comparison a measurement of that
+// number rather than of the simulation.
+private drop_height(restitution: f32) -> f32
+    val w = world()
+    val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
+
+    ground.polygon(shape_def(restitution = restitution), make_box(50.0, 1.0))
+
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 4.0)))
+
+    ball.circle(shape_def(density = 1.0, restitution = restitution), circle(zero(), 0.5))
+
+    var landed = false
+    var highest: f32 = 0.0
+
+    for _ in 0..<300
+        w.step(1.0 / 60.0)
+
+        val y = ball.position().y
+
+        if y < 0.6 then landed = true
+        elif landed && y > highest then highest = y
+
+    highest
+end drop_height
+
+// -- filtering ------------------------------------------------------------------------------------
+
+@test("two shapes in each other's masks collide, and two that are not pass through")
+filtering_decides_collision()
+    assert(falls_through(filter(category_bits = 2u64, mask_bits = 1u64),
+                         filter(category_bits = 4u64, mask_bits = 1u64)))
+    assert(!falls_through(filter(), filter()))
+end filtering_decides_collision
+
+// Whether a ball dropped onto a floor ends up below it. The two filters are the only difference
+// between the runs.
+private falls_through(ground_filter: c.Filter, ball_filter: c.Filter) -> bool
+    val w = world()
+    val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
+
+    ground.polygon(shape_def(filter = ground_filter), make_box(50.0, 1.0))
+
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 4.0)))
+
+    ball.circle(shape_def(density = 1.0, filter = ball_filter), circle(zero(), 0.5))
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+
+    ball.position().y < -2.0
+end falls_through
+
+// -- events ---------------------------------------------------------------------------------------
+
+@test("a collision is reported as a begin-touch event")
+contacts_are_reported()
+    val w = world()
+    val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
+
+    ground.polygon(shape_def(enable_contact_events = true), make_box(50.0, 1.0))
+
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 4.0)))
+
+    ball.circle(shape_def(density = 1.0, enable_contact_events = true), circle(zero(), 0.5))
+
+    var began: usize = 0
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+        began += w.contact_events().began.len
+
+    assert(began >= 1)
+end contacts_are_reported
+
+@test("a sensor sees what passes through it without stopping it")
+a_sensor_reports_without_colliding()
+    val w = world()
+    val gate = w.body(body_def(position = Vec2(0.0, 2.0)))
+
+    gate.polygon(shape_def(is_sensor = true), make_box(2.0, 0.1))
+
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 6.0)))
+
+    ball.circle(shape_def(density = 1.0, enable_sensor_events = true), circle(zero(), 0.5))
+
+    var seen: usize = 0
+
+    for _ in 0..<180
+        w.step(1.0 / 60.0)
+        seen += w.sensor_events().began.len
+
+    assert(seen >= 1)
+    // It went straight through: a sensor generates no collision response.
+    assert(ball.position().y < 0.0)
+end a_sensor_reports_without_colliding
+
+@test("a body the solver moved turns up in the move events")
+moves_are_reported()
+    val w = world()
+    val b = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 5.0)))
+
+    b.circle(shape_def(), circle(zero(), 0.5))
+    w.step(1.0 / 60.0)
+
+    assert_eq(w.move_events().len, 1)
+end moves_are_reported
+
+// -- sleeping and removal -------------------------------------------------------------------------
+
+@test("a body that has come to rest goes to sleep")
+a_resting_body_sleeps()
+    val w = world()
+    val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
+
+    ground.polygon(shape_def(), make_box(50.0, 1.0))
+
+    val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 1.0)))
+
+    ball.circle(shape_def(density = 1.0), circle(zero(), 0.5))
+
+    assert(ball.is_awake())
+
+    for _ in 0..<300
+        w.step(1.0 / 60.0)
+
+    assert(!ball.is_awake())
+    assert_eq(w.awake_body_count(), 0)
+end a_resting_body_sleeps
+
+@test("a removed body is invalid rather than a crash, which is what a generation counter buys")
+a_removed_body_is_detectably_gone()
+    val w = world()
+    val b = w.body(body_def())
+
+    assert(b.is_valid())
+    b.remove()
+    assert(!b.is_valid())
+end a_removed_body_is_detectably_gone
+
+@test("removing a shape takes its mass with it")
+removing_a_shape_updates_the_mass()
+    val w = world()
+    val b = w.body(body_def(kind = BodyKind.Dynamic))
+    val s = b.polygon(shape_def(density = 1.0), make_box(1.0, 1.0))
+
+    assert((b.mass() - 4.0).abs() < 0.001)
+    s.remove()
+    assert_eq(b.mass(), 0.0)
+end removing_a_shape_updates_the_mass
+
+@test("a disabled body takes no part until it is enabled again")
+a_disabled_body_does_nothing()
+    val w = world()
+    val b = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 5.0)))
+
+    b.circle(shape_def(), circle(zero(), 0.5))
+    b.disable()
+
+    assert(!b.is_enabled())
+
+    for _ in 0..<60
+        w.step(1.0 / 60.0)
+
+    assert_eq(b.position().y, 5.0)
+
+    b.enable()
+    assert(b.is_enabled())
+
+    for _ in 0..<60
+        w.step(1.0 / 60.0)
+
+    assert(b.position().y < 4.9)
+end a_disabled_body_does_nothing
+
+// -- polygons -------------------------------------------------------------------------------------
+
+@test("a convex hull becomes a polygon, and a degenerate one does not")
+polygons_come_from_hulls()
+    val triangle = make_polygon([Vec2(0.0, 0.0), Vec2(2.0, 0.0), Vec2(1.0, 2.0)])
+
+    assert(triangle.is_some())
+    assert_eq(triangle.unwrap().count, 3)
+
+    // Three points on a line are not a polygon, and Box2D would trap rather than answer.
+    assert(make_polygon([Vec2(0.0, 0.0), Vec2(1.0, 0.0), Vec2(2.0, 0.0)]).is_none())
+    assert(make_polygon([Vec2(0.0, 0.0), Vec2(1.0, 0.0)]).is_none())
+end polygons_come_from_hulls
+
+@test("a box is the size its half-extents say")
+a_box_has_its_extents()
+    val box = make_box(2.0, 3.0)
+
+    assert_eq(box.count, 4)
+    assert((polygon_mass(box, 1.0).mass - 24.0).abs() < 0.001)
+end a_box_has_its_extents
+
+@test("mass data is what the geometry and the density come to")
+mass_data_is_computed()
+    // A unit disc of density 1 weighs pi kilograms.
+    assert((circle_mass(circle(zero(), 1.0), 1.0).mass - f32(c.PI)).abs() < 0.001)
+end mass_data_is_computed

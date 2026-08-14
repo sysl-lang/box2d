@@ -24,12 +24,14 @@
 
 module sh.sysl.box2d.c
 
-// **`@include` is per file rather than per module**, because a `c const` block is measured in a probe
-// translation unit of its own and that unit includes what the file it came from names. So these two
-// lines are not a duplicate of `c.sysl`'s — they are what makes this file's three hundred
-// measurements about Box2D rather than about nothing.
+// **These two lines are not a duplicate of `c.sysl`'s.** A `c const` block is measured in a probe
+// translation unit of its own, and that unit includes what the *file* the block came from names — so
+// without them this file's three hundred measurements would be about nothing. The attribute has to
+// sit here, directly under `module` and above the import, which is where the compiler asks for it.
 @include("stddef.h")
 @include("box2d/box2d.h")
+
+import sh.sysl.box2d.math.{Vec2, CosSin, Rot, Transform, Mat22, AABB, Plane}
 
 // `b2Vec2` — 2 fields
 c const

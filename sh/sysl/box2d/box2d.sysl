@@ -1,0 +1,668 @@
+// Box2D for sysl — 2D rigid body physics: bodies, shapes, joints, contacts and queries, from the
+// engine behind Angry Birds, Crayon Physics and a decade of 2D games.
+//
+// ## The shape of it
+//
+// A `World` is the simulation. A `Body` is a rigid object in it, which has a position and a velocity
+// and nothing else — a body has no shape at all until one is attached. A `Shape` is geometry bolted
+// onto a body, carrying the collision properties: density, friction, bounce, and what it may collide
+// with. One body may carry several shapes, which is how a compound object is built.
+//
+//     val w = world(gravity = Vec2(0.0, -10.0))
+//
+//     val ground = w.body(body_def(position = Vec2(0.0, -10.0)))
+//     ground.polygon(shape_def(), make_box(50.0, 10.0))
+//
+//     val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 4.0)))
+//     ball.circle(shape_def(density = 1.0, friction = 0.3), Circle(zero(), 0.5))
+//
+//     for _ in 0..<90
+//         w.step(1.0 / 60.0)
+//
+//     print(ball.position())
+//
+// ## Nothing is destroyed by hand
+//
+// There is no `destroy` in this API. A `World` is reached through `&World` and has an `impl Drop`
+// that calls `b2DestroyWorld` when the last reference goes.
+//
+// **A body, a shape and a joint have no destructor, and that is a decision rather than an
+// omission.** `b2DestroyWorld` frees every body, shape and joint the world ever made, so a `Body`
+// with a destructor of its own would free storage that had already gone — SDL3's `quit` hazard in a
+// different library. What replaces it is a **field**: `Body`, `Shape`, `Chain` and `Joint` each hold
+// a `&World`, so the world outlives everything made in it and the ordering Box2D requires cannot be
+// written wrongly. That is `sqlite3`'s `&Db` answer, and it is the same argument — a rule the
+// library states in its documentation becomes a rule the type system keeps.
+//
+// A body *can* still be removed early, with `remove()`, when a game object dies. That is Box2D's
+// `b2DestroyBody` and it is the one thing here that invalidates ids; anything holding the removed
+// body's id afterwards will find `is_valid()` false rather than crashing, because an id carries a
+// generation counter.
+//
+// ## Ids are values, so there is no `opaque struct` here
+//
+// Every other binding in this org hides its handles behind `opaque struct`, because a handle is a
+// pointer. A Box2D id is not: it is an index and a generation, passed by value, and the generation
+// is what makes a stale reference *detectable* instead of a crash. `Body` and its siblings are
+// therefore small value structs — copying one is copying eight bytes and taking a reference to the
+// world — and comparing two with `==` asks whether they name the same object.
+//
+// ## Contacts arrive as arrays, not callbacks
+//
+// Box2D's solver is multithreaded, so it does not call back into an application while it is
+// stepping. Everything that happened during a step is buffered and read afterwards:
+// `contact_events()`, `sensor_events()` and `body_events()` each hand back slices that are valid
+// until the next `step`. That is why almost nothing in this package takes a function.
+//
+// The four things that genuinely are callbacks — a query's visitor, custom filtering, pre-solve, and
+// the friction and restitution mixers — take an `@export`ed sysl function directly. **No C
+// trampoline is needed and none is written**: since 0.0.55 an exported sysl function has a real
+// address with the C convention, so `&on_hit` is what Box2D is given. `query.sysl` has the details.
+
+module sh.sysl.box2d
+
+import sh.sysl.box2d.c
+import sh.sysl.box2d.math.{Vec2, Rot, Transform, AABB, Plane, CosSin, zero, identity, rot, cos_sin,
+                           atan2, identity_transform, rotation_between_unit_vectors}
+
+// **Nothing is imported from `c` unqualified, deliberately.** Three of Box2D's geometry types share
+// a name with a variant of an enumeration below — a shape is a `Circle` and its kind is
+// `ShapeKind.Circle` — and a variant may not share a name with a type in the same module. Rather
+// than spell either of them worse, this module says `c.Circle` in its own signatures and supplies
+// the constructors a program calls, so ordinary code writes `circle(zero(), 0.5)` and names no type
+// at all.
+import sysl.slices.as_mut_ptr
+import sysl.text.{cstring, from_cstring}
+
+// ## The enumerations
+//
+// Each is a sysl enum over numbers the C compiler supplies, so a wrong one cannot be passed and no
+// value here was typed by hand. `of` and `Other` appear only where Box2D ever *answers* one of
+// these — which it does for all three, since a body, a shape and a joint can each be asked its kind.
+
+// How a body takes part in the simulation.
+enum BodyKind
+    // Immovable and infinitely heavy. A wall, a floor, the level.
+    Static
+
+    // Moved by the application rather than by forces, and unstoppable by anything it hits. A moving
+    // platform.
+    Kinematic
+
+    // The ordinary case: mass, gravity, forces, collisions.
+    Dynamic
+
+    Other(code: i32)
+
+    code(self) -> i32
+        self match
+            Static -> c.STATIC_BODY
+            Kinematic -> c.KINEMATIC_BODY
+            Dynamic -> c.DYNAMIC_BODY
+            Other(n) -> n
+
+    of(code: i32) -> BodyKind
+        if code == c.STATIC_BODY then Static
+        elif code == c.KINEMATIC_BODY then Kinematic
+        elif code == c.DYNAMIC_BODY then Dynamic
+        else Other(code)
+end BodyKind
+
+impl Eq for BodyKind
+    eq(self, rhs: BodyKind) -> bool = self.code() == rhs.code()
+end BodyKind
+
+impl Display for BodyKind
+    display(self, out: *Writer, fmt: FormatSpec)
+        val s = self match
+            Static -> "static"
+            Kinematic -> "kinematic"
+            Dynamic -> "dynamic"
+            Other(n) -> "body type " + str(n)
+
+        display_str(s, out, fmt)
+end BodyKind
+
+// What geometry a shape is.
+enum ShapeKind
+    Circle
+    Capsule
+    Segment
+    Polygon
+
+    // One segment of a chain, which a chain makes and an application does not.
+    ChainSegment
+
+    Other(code: i32)
+
+    code(self) -> i32
+        self match
+            Circle -> c.CIRCLE_SHAPE
+            Capsule -> c.CAPSULE_SHAPE
+            Segment -> c.SEGMENT_SHAPE
+            Polygon -> c.POLYGON_SHAPE
+            ChainSegment -> c.CHAIN_SEGMENT_SHAPE
+            Other(n) -> n
+
+    of(code: i32) -> ShapeKind
+        if code == c.CIRCLE_SHAPE then Circle
+        elif code == c.CAPSULE_SHAPE then Capsule
+        elif code == c.SEGMENT_SHAPE then Segment
+        elif code == c.POLYGON_SHAPE then Polygon
+        elif code == c.CHAIN_SEGMENT_SHAPE then ChainSegment
+        else Other(code)
+end ShapeKind
+
+impl Eq for ShapeKind
+    eq(self, rhs: ShapeKind) -> bool = self.code() == rhs.code()
+end ShapeKind
+
+impl Display for ShapeKind
+    display(self, out: *Writer, fmt: FormatSpec)
+        val s = self match
+            Circle -> "circle"
+            Capsule -> "capsule"
+            Segment -> "segment"
+            Polygon -> "polygon"
+            ChainSegment -> "chain segment"
+            Other(n) -> "shape type " + str(n)
+
+        display_str(s, out, fmt)
+end ShapeKind
+
+// Which of the eight constraints a joint is.
+enum JointKind
+    Distance
+    Filter
+    Motor
+    Mouse
+    Prismatic
+    Revolute
+    Weld
+    Wheel
+
+    Other(code: i32)
+
+    code(self) -> i32
+        self match
+            Distance -> c.DISTANCE_JOINT
+            Filter -> c.FILTER_JOINT
+            Motor -> c.MOTOR_JOINT
+            Mouse -> c.MOUSE_JOINT
+            Prismatic -> c.PRISMATIC_JOINT
+            Revolute -> c.REVOLUTE_JOINT
+            Weld -> c.WELD_JOINT
+            Wheel -> c.WHEEL_JOINT
+            Other(n) -> n
+
+    of(code: i32) -> JointKind
+        if code == c.DISTANCE_JOINT then Distance
+        elif code == c.FILTER_JOINT then Filter
+        elif code == c.MOTOR_JOINT then Motor
+        elif code == c.MOUSE_JOINT then Mouse
+        elif code == c.PRISMATIC_JOINT then Prismatic
+        elif code == c.REVOLUTE_JOINT then Revolute
+        elif code == c.WELD_JOINT then Weld
+        elif code == c.WHEEL_JOINT then Wheel
+        else Other(code)
+end JointKind
+
+impl Eq for JointKind
+    eq(self, rhs: JointKind) -> bool = self.code() == rhs.code()
+end JointKind
+
+impl Display for JointKind
+    display(self, out: *Writer, fmt: FormatSpec)
+        val s = self match
+            Distance -> "distance"
+            Filter -> "filter"
+            Motor -> "motor"
+            Mouse -> "mouse"
+            Prismatic -> "prismatic"
+            Revolute -> "revolute"
+            Weld -> "weld"
+            Wheel -> "wheel"
+            Other(n) -> "joint type " + str(n)
+
+        display_str(s, out, fmt)
+end JointKind
+
+// ## The world
+
+// A simulation. Everything else in this package belongs to one.
+struct World
+    id: c.WorldId
+
+    // ### Stepping
+    //
+    // `sub_steps` is how many relaxation passes the solver makes inside the step. Four is Box2D's
+    // recommendation and is the default; more is stiffer and slower.
+
+    step(&self, time_step: f32, sub_steps: int = 4) = c.world_step(self.id, time_step, i32(sub_steps))
+
+    gravity(&self) -> Vec2 = c.world_get_gravity(self.id)
+    set_gravity(&self, g: Vec2) = c.world_set_gravity(self.id, g)
+
+    // ### Making things
+
+    body(&self, def: c.BodyDef) -> Body = Body(self, c.create_body(self.id, &def))
+
+    // ### What happened during the last step
+    //
+    // Each of these is a view into storage the world owns, valid until the next `step`. Nothing is
+    // copied, so reading them costs nothing — and holding one across a step is reading freed memory,
+    // which is why they are taken fresh each frame rather than kept.
+
+    contact_events(&self) -> ContactEvents
+        val e = c.world_get_contact_events(self.id)
+
+        ContactEvents(e.begin_events[0..<usize(e.begin_count)], e.end_events[0..<usize(e.end_count)],
+                      e.hit_events[0..<usize(e.hit_count)])
+    end contact_events
+
+    sensor_events(&self) -> SensorEvents
+        val e = c.world_get_sensor_events(self.id)
+
+        SensorEvents(e.begin_events[0..<usize(e.begin_count)], e.end_events[0..<usize(e.end_count)])
+    end sensor_events
+
+    // Every body the solver moved this step, as a contiguous array — which is what an application
+    // walks to update its own sprites, rather than asking each body for its transform in turn.
+    move_events(&self) -> []const c.BodyMoveEvent
+        val e = c.world_get_body_events(self.id)
+
+        e.move_events[0..<usize(e.move_count)]
+    end move_events
+
+    // ### Tuning
+
+    sleeping_enabled(&self) -> bool = c.world_is_sleeping_enabled(self.id)
+    enable_sleeping(&self, flag: bool) = c.world_enable_sleeping(self.id, flag)
+    continuous_enabled(&self) -> bool = c.world_is_continuous_enabled(self.id)
+    enable_continuous(&self, flag: bool) = c.world_enable_continuous(self.id, flag)
+    warm_starting_enabled(&self) -> bool = c.world_is_warm_starting_enabled(self.id)
+    enable_warm_starting(&self, flag: bool) = c.world_enable_warm_starting(self.id, flag)
+
+    // The speed above which a collision bounces. Below it, restitution is ignored, which is what
+    // stops a stack of boxes jittering forever.
+    restitution_threshold(&self) -> f32 = c.world_get_restitution_threshold(self.id)
+    set_restitution_threshold(&self, v: f32) = c.world_set_restitution_threshold(self.id, v)
+
+    // The approach speed above which a contact reports a hit event.
+    hit_event_threshold(&self) -> f32 = c.world_get_hit_event_threshold(self.id)
+    set_hit_event_threshold(&self, v: f32) = c.world_set_hit_event_threshold(self.id, v)
+
+    set_contact_tuning(&self, hertz: f32, damping_ratio: f32, push_speed: f32) =
+        c.world_set_contact_tuning(self.id, hertz, damping_ratio, push_speed)
+
+    maximum_linear_speed(&self) -> f32 = c.world_get_maximum_linear_speed(self.id)
+    set_maximum_linear_speed(&self, v: f32) = c.world_set_maximum_linear_speed(self.id, v)
+
+    awake_body_count(&self) -> int = int(c.world_get_awake_body_count(self.id))
+
+    is_valid(&self) -> bool = c.world_is_valid(self.id)
+
+    // A radial impulse over everything within `radius` of `position`, falling off to nothing at the
+    // edge. The one Box2D operation that acts on many bodies at once.
+    explode(&self, position: Vec2, radius: f32, impulse_per_length: f32, falloff: f32 = 0.0,
+            mask_bits: u64 = c.DEFAULT_MASK_BITS)
+        var d = c.default_explosion_def()
+
+        d.position = position
+        d.radius = radius
+        d.impulse_per_length = impulse_per_length
+        d.falloff = falloff
+        d.mask_bits = mask_bits
+
+        c.world_explode(self.id, &d)
+    end explode
+
+    // Rebuild the static broad-phase tree. Worth calling once after building a level and never in a
+    // frame — it is a full rebuild rather than an incremental update.
+    rebuild_static_tree(&self) = c.world_rebuild_static_tree(self.id)
+end World
+
+impl Drop for World
+    drop(self) = c.destroy_world(self.id)
+
+// A new simulation.
+//
+// `gravity` is a vector rather than a number because Box2D has no up: a top-down game passes
+// `zero()` and a platformer passes `Vec2(0.0, -10.0)`.
+//
+// **`worker_count` is left at one deliberately and there is no way to raise it here.** Box2D does
+// not make threads; a worker count above one is a promise that the application will supply a task
+// system through two more callbacks, and a package that let the count be set without them would be
+// handing Box2D a promise nobody keeps.
+//
+// **The three speed thresholds are not parameters either, and the reason is a real one.** The
+// restitution threshold, the hit-event threshold and the maximum linear speed are all *lengths per
+// second*, and Box2D computes each of them from `b2_lengthUnitsPerMeter` — a global that a game
+// working in pixels rather than metres sets once at startup. A default written here would be right
+// only at one length unit, so they are left exactly as Box2D computed them and changed afterwards
+// through `set_restitution_threshold` and its two siblings, where a caller can see the unit it is
+// working in. Writing them out here was the first thing `world_def_matches_the_library` caught:
+// the maximum linear speed is 400 m/s and this said 4.
+world(gravity: Vec2 = Vec2(0.0, -10.0), contact_hertz: f32 = 30.0, contact_damping_ratio: f32 = 10.0,
+      enable_sleep: bool = true, enable_continuous: bool = true) -> &World
+    var d = c.default_world_def()
+
+    d.gravity = gravity
+    d.contact_hertz = contact_hertz
+    d.contact_damping_ratio = contact_damping_ratio
+    d.enable_sleep = enable_sleep
+    d.enable_continuous = enable_continuous
+
+    World(c.create_world(&d))
+end world
+
+// ## Bodies
+
+// A rigid object: a position, a rotation, a velocity, a mass. Geometry is attached separately.
+//
+// **It holds the world**, so a body cannot outlive the simulation it belongs to. See the header.
+struct Body
+    world: &World
+    id: c.BodyId
+
+    // ### Attaching geometry
+    //
+    // Each of these returns the `Shape` it made. Most programs discard it — a shape is reached again
+    // through its body, or through the id in a contact event — but it is what `sensor_overlaps` and
+    // the per-shape setters are called on.
+
+    circle(self, def: c.ShapeDef, shape: c.Circle) -> Shape =
+        Shape(self.world, c.create_circle_shape(self.id, &def, &shape))
+    capsule(self, def: c.ShapeDef, shape: c.Capsule) -> Shape =
+        Shape(self.world, c.create_capsule_shape(self.id, &def, &shape))
+    segment(self, def: c.ShapeDef, shape: c.Segment) -> Shape =
+        Shape(self.world, c.create_segment_shape(self.id, &def, &shape))
+    polygon(self, def: c.ShapeDef, shape: c.Polygon) -> Shape =
+        Shape(self.world, c.create_polygon_shape(self.id, &def, &shape))
+
+    // ### Where it is
+
+    position(self) -> Vec2 = c.body_get_position(self.id)
+    rotation(self) -> Rot = c.body_get_rotation(self.id)
+    transform(self) -> Transform = c.body_get_transform(self.id)
+    set_transform(self, position: Vec2, rotation: Rot = identity()) =
+        c.body_set_transform(self.id, position, rotation)
+
+    // Between the body's frame and the world's.
+    local_point(self, world_point: Vec2) -> Vec2 = c.body_get_local_point(self.id, world_point)
+    world_point(self, local_point: Vec2) -> Vec2 = c.body_get_world_point(self.id, local_point)
+    local_vector(self, world_vector: Vec2) -> Vec2 = c.body_get_local_vector(self.id, world_vector)
+    world_vector(self, local_vector: Vec2) -> Vec2 = c.body_get_world_vector(self.id, local_vector)
+
+    // ### How it is moving
+
+    linear_velocity(self) -> Vec2 = c.body_get_linear_velocity(self.id)
+    set_linear_velocity(self, v: Vec2) = c.body_set_linear_velocity(self.id, v)
+    angular_velocity(self) -> f32 = c.body_get_angular_velocity(self.id)
+    set_angular_velocity(self, w: f32) = c.body_set_angular_velocity(self.id, w)
+    velocity_at_world_point(self, p: Vec2) -> Vec2 = c.body_get_world_point_velocity(self.id, p)
+    velocity_at_local_point(self, p: Vec2) -> Vec2 = c.body_get_local_point_velocity(self.id, p)
+
+    // ### Pushing it about
+    //
+    // A **force** acts over the step and is what gravity and thrust are. An **impulse** is applied at
+    // once and is what a jump or an explosion is. Applying either to a sleeping body does nothing
+    // unless `wake` is true, which is why it defaults to true.
+
+    apply_force(self, force: Vec2, point: Vec2, wake: bool = true) =
+        c.body_apply_force(self.id, force, point, wake)
+    apply_force_to_center(self, force: Vec2, wake: bool = true) =
+        c.body_apply_force_to_center(self.id, force, wake)
+    apply_torque(self, torque: f32, wake: bool = true) = c.body_apply_torque(self.id, torque, wake)
+    apply_linear_impulse(self, impulse: Vec2, point: Vec2, wake: bool = true) =
+        c.body_apply_linear_impulse(self.id, impulse, point, wake)
+    apply_linear_impulse_to_center(self, impulse: Vec2, wake: bool = true) =
+        c.body_apply_linear_impulse_to_center(self.id, impulse, wake)
+    apply_angular_impulse(self, impulse: f32, wake: bool = true) =
+        c.body_apply_angular_impulse(self.id, impulse, wake)
+
+    // ### Mass
+    //
+    // A dynamic body's mass is normally the sum of what its shapes contribute, and is recomputed as
+    // shapes are added. `set_mass_data` overrides that for a body whose shapes are not what it should
+    // weigh; `apply_mass_from_shapes` puts it back.
+
+    mass(self) -> f32 = c.body_get_mass(self.id)
+    rotational_inertia(self) -> f32 = c.body_get_rotational_inertia(self.id)
+    local_center_of_mass(self) -> Vec2 = c.body_get_local_center_of_mass(self.id)
+    world_center_of_mass(self) -> Vec2 = c.body_get_world_center_of_mass(self.id)
+    mass_data(self) -> c.MassData = c.body_get_mass_data(self.id)
+    set_mass_data(self, m: c.MassData) = c.body_set_mass_data(self.id, m)
+    apply_mass_from_shapes(self) = c.body_apply_mass_from_shapes(self.id)
+
+    // ### What kind of body it is
+
+    kind(self) -> BodyKind = BodyKind.of(c.body_get_type(self.id))
+    set_kind(self, k: BodyKind) = c.body_set_type(self.id, k.code())
+
+    linear_damping(self) -> f32 = c.body_get_linear_damping(self.id)
+    set_linear_damping(self, d: f32) = c.body_set_linear_damping(self.id, d)
+    angular_damping(self) -> f32 = c.body_get_angular_damping(self.id)
+    set_angular_damping(self, d: f32) = c.body_set_angular_damping(self.id, d)
+    gravity_scale(self) -> f32 = c.body_get_gravity_scale(self.id)
+    set_gravity_scale(self, s: f32) = c.body_set_gravity_scale(self.id, s)
+
+    fixed_rotation(self) -> bool = c.body_is_fixed_rotation(self.id)
+    set_fixed_rotation(self, flag: bool) = c.body_set_fixed_rotation(self.id, flag)
+
+    // A bullet is swept against the world rather than teleported through it. Expensive, so Box2D
+    // asks that it be used sparingly.
+    is_bullet(self) -> bool = c.body_is_bullet(self.id)
+    set_bullet(self, flag: bool) = c.body_set_bullet(self.id, flag)
+
+    // ### Sleeping and being switched off
+    //
+    // A body that has been nearly still for half a second goes to sleep and costs the solver nothing
+    // until something touches it. **Disabling** is different and stronger: a disabled body is removed
+    // from the simulation entirely — no collisions, no queries — until it is enabled again.
+
+    is_awake(self) -> bool = c.body_is_awake(self.id)
+    set_awake(self, awake: bool) = c.body_set_awake(self.id, awake)
+    sleep_enabled(self) -> bool = c.body_is_sleep_enabled(self.id)
+    enable_sleep(self, flag: bool) = c.body_enable_sleep(self.id, flag)
+    sleep_threshold(self) -> f32 = c.body_get_sleep_threshold(self.id)
+    set_sleep_threshold(self, v: f32) = c.body_set_sleep_threshold(self.id, v)
+
+    is_enabled(self) -> bool = c.body_is_enabled(self.id)
+    enable(self) = c.body_enable(self.id)
+    disable(self) = c.body_disable(self.id)
+
+    enable_contact_events(self, flag: bool) = c.body_enable_contact_events(self.id, flag)
+    enable_hit_events(self, flag: bool) = c.body_enable_hit_events(self.id, flag)
+
+    // ### What is attached to it
+
+    shape_count(self) -> int = int(c.body_get_shape_count(self.id))
+
+    // Every shape on this body. The array is the caller's, so this allocates once per call rather
+    // than handing back a view Box2D could invalidate.
+    shapes(self) -> []Shape
+        val n = c.body_get_shape_count(self.id)
+        var ids: []c.ShapeId = [c.ShapeId(0, 0, 0); usize(n)]
+        val got = usize(c.body_get_shapes(self.id, as_mut_ptr(ids[..]), n))
+        var out: []Shape = [Shape(self.world, c.ShapeId(0, 0, 0)); got]
+
+        for i in 0..<got do out[i] = Shape(self.world, ids[i])
+
+        out
+    end shapes
+
+    joint_count(self) -> int = int(c.body_get_joint_count(self.id))
+
+    // The box that holds every shape on this body, in world coordinates.
+    aabb(self) -> AABB = c.body_compute_aabb(self.id)
+
+    // ### Identity
+    //
+    // A name is for debugging and is what Box2D prints; it is capped at 31 characters and truncated
+    // rather than refused.
+
+    name(self) -> string = from_cstring(c.body_get_name(self.id)).unwrap_or("")
+    set_name(self, s: string)
+        val cs = cstring(s)
+
+        c.body_set_name(self.id, cs.ptr)
+    end set_name
+
+    // False once the body has been removed, or once its world has gone. This is what a generation
+    // counter buys: a stale id answers rather than crashing.
+    is_valid(self) -> bool = c.body_is_valid(self.id)
+
+    // Take this body, and everything attached to it, out of the world. Every id naming it becomes
+    // invalid — detectably so.
+    remove(self) = c.destroy_body(self.id)
+end Body
+
+impl Eq for Body
+    eq(self, rhs: Body) -> bool =
+        self.id.index1 == rhs.id.index1 && self.id.world0 == rhs.id.world0 &&
+        self.id.generation == rhs.id.generation
+end Body
+
+// A body renders as its index and generation, which is what a failing test needs to tell two apart.
+impl Display for Body
+    display(self, out: *Writer, fmt: FormatSpec) =
+        display_str("body " + str(self.id.index1) + "." + str(self.id.generation), out, fmt)
+end Body
+
+// ## Shapes
+
+// Geometry attached to a body, with the properties a collision uses.
+struct Shape
+    world: &World
+    id: c.ShapeId
+
+    kind(self) -> ShapeKind = ShapeKind.of(c.shape_get_type(self.id))
+    body(self) -> Body = Body(self.world, c.shape_get_body(self.id))
+
+    // ### The surface
+
+    density(self) -> f32 = c.shape_get_density(self.id)
+    set_density(self, d: f32, update_body_mass: bool = true) =
+        c.shape_set_density(self.id, d, update_body_mass)
+    friction(self) -> f32 = c.shape_get_friction(self.id)
+    set_friction(self, f: f32) = c.shape_set_friction(self.id, f)
+    restitution(self) -> f32 = c.shape_get_restitution(self.id)
+    set_restitution(self, r: f32) = c.shape_set_restitution(self.id, r)
+    surface_material(self) -> c.SurfaceMaterial = c.shape_get_surface_material(self.id)
+    set_surface_material(self, m: c.SurfaceMaterial) = c.shape_set_surface_material(self.id, m)
+
+    filter(self) -> c.Filter = c.shape_get_filter(self.id)
+    set_filter(self, f: c.Filter) = c.shape_set_filter(self.id, f)
+
+    // ### Sensors and events
+    //
+    // A sensor reports overlaps and never pushes anything. Its events are off by default even for a
+    // sensor, which is Box2D's choice and not this binding's — `shape_def(is_sensor = true)` turns
+    // both on together, which is almost always what was meant.
+
+    is_sensor(self) -> bool = c.shape_is_sensor(self.id)
+    sensor_events_enabled(self) -> bool = c.shape_are_sensor_events_enabled(self.id)
+    enable_sensor_events(self, flag: bool) = c.shape_enable_sensor_events(self.id, flag)
+    contact_events_enabled(self) -> bool = c.shape_are_contact_events_enabled(self.id)
+    enable_contact_events(self, flag: bool) = c.shape_enable_contact_events(self.id, flag)
+    hit_events_enabled(self) -> bool = c.shape_are_hit_events_enabled(self.id)
+    enable_hit_events(self, flag: bool) = c.shape_enable_hit_events(self.id, flag)
+    pre_solve_events_enabled(self) -> bool = c.shape_are_pre_solve_events_enabled(self.id)
+    enable_pre_solve_events(self, flag: bool) = c.shape_enable_pre_solve_events(self.id, flag)
+
+    // ### Asking about the geometry
+
+    test_point(self, point: Vec2) -> bool = c.shape_test_point(self.id, point)
+    closest_point(self, target: Vec2) -> Vec2 = c.shape_get_closest_point(self.id, target)
+    aabb(self) -> AABB = c.shape_get_aabb(self.id)
+    mass_data(self) -> c.MassData = c.shape_get_mass_data(self.id)
+
+    // A ray in this shape's own world position. `hit` is false if it misses.
+    ray_cast(self, origin: Vec2, translation: Vec2, max_fraction: f32 = 1.0) -> c.CastOutput
+        var input = c.RayCastInput(origin, translation, max_fraction)
+
+        c.shape_ray_cast(self.id, &input)
+    end ray_cast
+
+    // The geometry itself, in the body's frame. **Each asks Box2D for a specific kind and Box2D
+    // traps if the shape is another**, so `kind()` is what decides which to call.
+    as_circle(self) -> c.Circle = c.shape_get_circle(self.id)
+    as_capsule(self) -> c.Capsule = c.shape_get_capsule(self.id)
+    as_segment(self) -> c.Segment = c.shape_get_segment(self.id)
+    as_polygon(self) -> c.Polygon = c.shape_get_polygon(self.id)
+
+    set_circle(self, s: c.Circle) = c.shape_set_circle(self.id, &s)
+    set_capsule(self, s: c.Capsule) = c.shape_set_capsule(self.id, &s)
+    set_segment(self, s: c.Segment) = c.shape_set_segment(self.id, &s)
+    set_polygon(self, s: c.Polygon) = c.shape_set_polygon(self.id, &s)
+
+    // Every shape currently overlapping this sensor. Empty unless this shape is a sensor with its
+    // events enabled, and refreshed by each step.
+    sensor_overlaps(self) -> []Shape
+        val n = c.shape_get_sensor_capacity(self.id)
+        var ids: []c.ShapeId = [c.ShapeId(0, 0, 0); usize(n)]
+        val got = usize(c.shape_get_sensor_overlaps(self.id, as_mut_ptr(ids[..]), n))
+        var out: []Shape = [Shape(self.world, c.ShapeId(0, 0, 0)); got]
+
+        for i in 0..<got do out[i] = Shape(self.world, ids[i])
+
+        out
+    end sensor_overlaps
+
+    is_valid(self) -> bool = c.shape_is_valid(self.id)
+
+    // Remove this shape from its body. `update_body_mass` recomputes the body's mass from what is
+    // left, which is what a caller wants unless it is about to remove several.
+    remove(self, update_body_mass: bool = true) = c.destroy_shape(self.id, update_body_mass)
+end Shape
+
+impl Eq for Shape
+    eq(self, rhs: Shape) -> bool =
+        self.id.index1 == rhs.id.index1 && self.id.world0 == rhs.id.world0 &&
+        self.id.generation == rhs.id.generation
+end Shape
+
+impl Display for Shape
+    display(self, out: *Writer, fmt: FormatSpec) =
+        display_str("shape " + str(self.id.index1) + "." + str(self.id.generation), out, fmt)
+end Shape
+
+// ## Chains
+//
+// A chain is a run of one-sided segments — the ground of a side-scroller. It is one-sided because
+// that is what removes the ghost collisions a strip of two-sided segments produces: a box sliding
+// along them catches on the joins.
+struct Chain
+    world: &World
+    id: c.ChainId
+
+    segment_count(self) -> int = int(c.chain_get_segment_count(self.id))
+    friction(self) -> f32 = c.chain_get_friction(self.id)
+    set_friction(self, f: f32) = c.chain_set_friction(self.id, f)
+    restitution(self) -> f32 = c.chain_get_restitution(self.id)
+    set_restitution(self, r: f32) = c.chain_set_restitution(self.id, r)
+    is_valid(self) -> bool = c.chain_is_valid(self.id)
+    remove(self) = c.destroy_chain(self.id)
+end Chain
+
+// ## Events read after a step
+//
+// Each field is a view into the world's own storage and is valid until the next `step`.
+
+struct ContactEvents
+    // Pairs that started touching. Each carries the manifold as it was before the solver ran, so
+    // every impulse in it is zero.
+    began: []const c.ContactBeginTouchEvent
+
+    // Pairs that stopped touching. **Either shape may already have been destroyed** — that is often
+    // *why* the contact ended — so `Shape.is_valid` is worth asking before acting on one.
+    ended: []const c.ContactEndTouchEvent
+
+    // Collisions faster than the world's hit threshold, with the point and the approach speed. This
+    // is what a sound effect is driven from.
+    hits: []const c.ContactHitEvent
+
+struct SensorEvents
+    began: []const c.SensorBeginTouchEvent
+    ended: []const c.SensorEndTouchEvent

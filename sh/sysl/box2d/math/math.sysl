@@ -1,0 +1,376 @@
+// Box2D's vector, rotation, transform and bounding box — in sysl, with operators, and with no C at
+// all.
+//
+// ## Why this is a module of its own, and why it is below the binding rather than above it
+//
+// Box2D's public surface is 466 entry points and **seventy-nine `static inline` math functions**.
+// The inline ones have no symbol, so a binding cannot link them; `15 §7` calls that its third
+// C-only shape and says a shim is the answer. **This package writes them in sysl instead**, which
+// is the better answer here for a reason particular to what they are: every one is two or three
+// lines of arithmetic over two floats, so a shim would be seventy-nine C functions that exist only
+// to be crossed, and what a caller would get for it is `b2Add(a, b)` where `a + b` was meant.
+//
+// Putting them in sysl needs the types to be *sysl's*, and that decides where they live. A method
+// belongs to the type's own body (`08 §2`) and an `impl` to the module declaring the type or the
+// trait (`14 §5`) — so `impl Add for Vec2` can only sit where `Vec2` is declared. `Vec2` cannot be
+// declared in the layer above the binding, because the binding's three hundred signatures need it
+// and `13 §6` makes the import graph acyclic. **So it is declared below both**: `sh.sysl.box2d.c`
+// imports this module, and so does the module above it, and neither imports the other's types
+// twice.
+//
+// The consequence worth stating is that **this module is usable with no physics engine at all**. It
+// is a small 2D linear algebra library in pure sysl that happens to have Box2D's exact layouts, and
+// a program that only wants vectors and rotations can import it alone.
+//
+// ## A rotation is a cosine and a sine, not an angle
+//
+// `Rot` stores `cos θ` and `sin θ`. Composing two rotations is then a multiplication rather than an
+// addition-and-two-trig-calls, rotating a vector is four multiplies, and a rotation that is updated
+// every step stays on the unit circle under `normalize` rather than accumulating the drift a
+// repeatedly-wrapped angle does. `rot(radians)` converts in, `angle()` converts out, and a program
+// that never needs a number of radians never calls either.
+//
+// **Both conversions are Box2D's own approximations rather than the platform's `cosf` and `atan2f`,
+// and that is the point of them.** Box2D computes them from fixed polynomials so that a simulation
+// replays identically on two machines with two different libms — determinism is the whole reason
+// they exist — so reimplementing them here means reproducing those polynomials exactly, which is
+// what the code below does. `tests.sysl` compares this module's answers with the library's own,
+// bit for bit, over a sweep of angles; that test is what makes this a port rather than a rewrite.
+
+module sh.sysl.box2d.math
+
+import sysl.math.{Float, pi}
+
+// ## Vectors
+
+struct Vec2
+    x: f32
+    y: f32
+
+    // The dot product, and the 2D cross product — which is a scalar, being the z component of the
+    // 3D cross of two vectors in the plane. It is the signed area of the parallelogram, so it is
+    // also what says which side of `self` the other vector is on.
+    dot(self, b: Vec2) -> f32 = self.x * b.x + self.y * b.y
+    cross(self, b: Vec2) -> f32 = self.x * b.y - self.y * b.x
+
+    // `self` rotated a quarter turn. Counter-clockwise is the left one, since Box2D's winding is
+    // counter-clockwise and a polygon's outward normals are the right perpendiculars of its edges.
+    left_perp(self) -> Vec2 = Vec2(-self.y, self.x)
+    right_perp(self) -> Vec2 = Vec2(self.y, -self.x)
+
+    length(self) -> f32 = (self.x * self.x + self.y * self.y).sqrt()
+    length_squared(self) -> f32 = self.x * self.x + self.y * self.y
+    distance(self, b: Vec2) -> f32 = (self - b).length()
+    distance_squared(self, b: Vec2) -> f32 = (self - b).length_squared()
+
+    // A unit vector in the same direction, and the zero vector where there is no direction to
+    // preserve. Box2D returns zero rather than a NaN for the degenerate case, which is what lets a
+    // solver carry on with a contact whose normal has collapsed.
+    normalize(self) -> Vec2
+        val len = self.length()
+
+        if len < 1.0e-23 then Vec2(0.0, 0.0) else Vec2(self.x / len, self.y / len)
+    end normalize
+
+    // The length, and the unit vector, in one answer — the shape a caller wants when it needs both
+    // and would otherwise take the square root twice.
+    normalize_and_length(self) -> (Vec2, f32)
+        val len = self.length()
+
+        if len < 1.0e-23 then (Vec2(0.0, 0.0), 0.0) else (Vec2(self.x / len, self.y / len), len)
+    end normalize_and_length
+
+    is_normalized(self) -> bool = (self.length_squared() - 1.0).abs() < 6.0e-4
+
+    abs(self) -> Vec2 = Vec2(self.x.abs(), self.y.abs())
+    min(self, b: Vec2) -> Vec2 = Vec2(if self.x < b.x then self.x else b.x, if self.y < b.y then self.y else b.y)
+    max(self, b: Vec2) -> Vec2 = Vec2(if self.x > b.x then self.x else b.x, if self.y > b.y then self.y else b.y)
+    clamp(self, lower: Vec2, upper: Vec2) -> Vec2 = self.max(lower).min(upper)
+    lerp(self, b: Vec2, t: f32) -> Vec2 = Vec2((1.0 - t) * self.x + t * b.x, (1.0 - t) * self.y + t * b.y)
+
+    // `self + s * b`, which is the accumulate step the solver spends most of its time in and is
+    // worth a name so that it reads as one operation.
+    mul_add(self, s: f32, b: Vec2) -> Vec2 = Vec2(self.x + s * b.x, self.y + s * b.y)
+    mul_sub(self, s: f32, b: Vec2) -> Vec2 = Vec2(self.x - s * b.x, self.y - s * b.y)
+
+    is_valid(self) -> bool = self.x.is_finite() && self.y.is_finite()
+end Vec2
+
+impl Add for Vec2
+    add(self, rhs: Vec2) -> Vec2 = Vec2(self.x + rhs.x, self.y + rhs.y)
+end Vec2
+
+impl Sub for Vec2
+    sub(self, rhs: Vec2) -> Vec2 = Vec2(self.x - rhs.x, self.y - rhs.y)
+end Vec2
+
+impl Neg for Vec2
+    neg(self) -> Vec2 = Vec2(-self.x, -self.y)
+end Vec2
+
+// **There is no scalar on the left**, for the reason `library/sysl/math/complex` gives about the
+// same absence: `2.0 * v` would need an `impl Mul[Vec2] for f32`, and `14 §5` puts an `impl` in the
+// module declaring the trait or the type, neither of which is this one. `v * 2.0` is what compiles.
+impl Mul[f32] for Vec2
+    mul(self, rhs: f32) -> Vec2 = Vec2(self.x * rhs, self.y * rhs)
+end Vec2
+
+impl Eq for Vec2
+    eq(self, rhs: Vec2) -> bool = self.x == rhs.x && self.y == rhs.y
+end Vec2
+
+impl Display for Vec2
+    display(self, out: *Writer, fmt: FormatSpec) = display_str("(" + str(self.x) + ", " + str(self.y) + ")", out, fmt)
+end Vec2
+
+// The zero vector, named because `Vec2(0.0, 0.0)` appears in every program that uses this package.
+zero() -> Vec2 = Vec2(0.0, 0.0)
+
+// ## Rotations
+
+struct CosSin
+    cosine: f32
+    sine: f32
+
+struct Rot
+    c: f32
+    s: f32
+
+    // The angle this rotation stands for, in radians, in `[-pi, pi]`.
+    angle(self) -> f32 = atan2(self.s, self.c)
+
+    normalize(self) -> Rot
+        val mag = (self.s * self.s + self.c * self.c).sqrt()
+        val inv_mag: f32 = if mag > 0.0 then 1.0 / mag else 0.0
+
+        Rot(self.c * inv_mag, self.s * inv_mag)
+    end normalize
+
+    is_normalized(self) -> bool = (self.s * self.s + self.c * self.c - 1.0).abs() < 6.0e-4
+
+    inverse(self) -> Rot = Rot(self.c, -self.s)
+
+    // The rotation's own axes, which are the columns of the matrix it stands for.
+    x_axis(self) -> Vec2 = Vec2(self.c, self.s)
+    y_axis(self) -> Vec2 = Vec2(-self.s, self.c)
+
+    rotate(self, v: Vec2) -> Vec2 = Vec2(self.c * v.x - self.s * v.y, self.s * v.x + self.c * v.y)
+    inv_rotate(self, v: Vec2) -> Vec2 = Vec2(self.c * v.x + self.s * v.y, -self.s * v.x + self.c * v.y)
+
+    // One step of `q' = q + dq/dt * dt`, renormalized. This is the integration the solver does per
+    // body per step, and it is an addition rather than a trig call, which is the argument for
+    // storing a rotation this way in the first place.
+    integrate(self, delta_angle: f32) -> Rot
+        val q2 = Rot(self.c - delta_angle * self.s, self.s + delta_angle * self.c)
+        val mag = (q2.s * q2.s + q2.c * q2.c).sqrt()
+        val inv_mag: f32 = if mag > 0.0 then 1.0 / mag else 0.0
+
+        Rot(q2.c * inv_mag, q2.s * inv_mag)
+    end integrate
+
+    // The angle from this rotation to another, in `[-pi, pi]` — the relative angle a joint limit is
+    // written against.
+    relative_angle(self, b: Rot) -> f32 = self.inverse().mul(b).angle()
+
+    is_valid(self) -> bool = self.c.is_finite() && self.s.is_finite() && self.is_normalized()
+end Rot
+
+// Composing two rotations is multiplying them, which is what storing a cosine and a sine buys.
+impl Mul for Rot
+    mul(self, rhs: Rot) -> Rot = Rot(self.c * rhs.c - self.s * rhs.s, self.s * rhs.c + self.c * rhs.s)
+end Rot
+
+impl Eq for Rot
+    eq(self, rhs: Rot) -> bool = self.c == rhs.c && self.s == rhs.s
+end Rot
+
+impl Display for Rot
+    display(self, out: *Writer, fmt: FormatSpec) = display_str(str(self.angle()) + " rad", out, fmt)
+end Rot
+
+// The identity rotation.
+identity() -> Rot = Rot(1.0, 0.0)
+
+// ## The two conversions, which are Box2D's polynomials rather than the platform's libm
+//
+// `cos_sin` and `atan2` below are `b2ComputeCosSin` and `b2Atan2` written in sysl. They are here
+// rather than bound because this module may not import the binding — see the header — and they are
+// reproduced rather than replaced with `sysl.math`'s because Box2D chose them for determinism, and
+// a simulation whose rotations came from a different approximation would not replay against one
+// that used the library's own. `tests.sysl` measures that claim against the real thing.
+
+// Any angle brought into `[-pi, pi]`.
+//
+// **This is C's `remainder`, which sysl's `fmod` is not.** `fmod` truncates and so lands in
+// `(-2pi, 2pi)` with the sign of the input; `remainder` rounds to nearest and lands in `[-pi, pi]`.
+// Both are exact — neither introduces a rounding error of its own — so the single correction below
+// reconstructs one from the other, and the two agree except at an exact odd multiple of `pi`, where
+// C breaks the tie toward an even quotient and this picks a sign.
+private unwind(radians: f32) -> f32
+    val two_pi = 2.0 * f32(pi)
+    val r = radians.fmod(two_pi)
+
+    if r > f32(pi) then r - two_pi
+    elif r < -f32(pi) then r + two_pi
+    else r
+end unwind
+
+// The cosine and sine of an angle, to about four decimal places, from a rational approximation
+// Box2D uses in place of the platform's.
+cos_sin(radians: f32) -> CosSin
+    val x = unwind(radians)
+    val p = f32(pi)
+    val pi2 = p * p
+
+    // The cosine's approximation is valid on `[-pi/2, pi/2]`, so an angle outside it is reflected
+    // through `pi` and the sign flipped.
+    val c = if x < -0.5 * p then
+                val y = x + p
+
+                -(pi2 - 4.0 * (y * y)) / (pi2 + y * y)
+            elif x > 0.5 * p then
+                val y = x - p
+
+                -(pi2 - 4.0 * (y * y)) / (pi2 + y * y)
+            else
+                -(4.0 * (x * x) - pi2) / (pi2 + x * x)
+
+    // The sine's is valid on `[0, pi]`, so a negative angle is reflected and negated.
+    val s = if x < 0.0 then
+                val y = x + p
+
+                -16.0 * y * (p - y) / (5.0 * pi2 - 4.0 * y * (p - y))
+            else
+                16.0 * x * (p - x) / (5.0 * pi2 - 4.0 * x * (p - x))
+
+    val mag = (s * s + c * c).sqrt()
+    val inv_mag: f32 = if mag > 0.0 then 1.0 / mag else 0.0
+
+    CosSin(c * inv_mag, s * inv_mag)
+end cos_sin
+
+// The rotation standing for an angle in radians.
+rot(radians: f32) -> Rot
+    val cs = cos_sin(radians)
+
+    Rot(cs.cosine, cs.sine)
+end rot
+
+// `atan2`, from a minimax polynomial on `[0, 1]` mapped around the circle. Accurate to about
+// 0.0002 radians, which is Box2D's own figure for it.
+atan2(y: f32, x: f32) -> f32
+    if x == 0.0 && y == 0.0 then 0.0
+    else
+        val ax = x.abs()
+        val ay = y.abs()
+        val mx = if ay > ax then ay else ax
+        val mn = if ay < ax then ay else ax
+        val a = mn / mx
+
+        val s = a * a
+        val cube = s * a
+        val q = s * s
+        val r0 = 0.024840285 * q + 0.18681418
+        val t = -0.094097948 * q - 0.33213072
+        val r1 = r0 * s + t
+        val r2 = r1 * cube + a
+
+        val r3 = if ay > ax then 1.57079637 - r2 else r2
+        val r4 = if x < 0.0 then 3.14159274 - r3 else r3
+
+        if y < 0.0 then -r4 else r4
+end atan2
+
+// The shortest rotation taking one unit vector to another.
+rotation_between_unit_vectors(v1: Vec2, v2: Vec2) -> Rot = Rot(v1.dot(v2), v1.cross(v2)).normalize()
+
+// ## Transforms
+
+struct Transform
+    p: Vec2
+    q: Rot
+
+    // A point in this frame, expressed in the frame this one is written in, and back again.
+    apply(self, local_point: Vec2) -> Vec2 = self.q.rotate(local_point) + self.p
+    invert(self, world_point: Vec2) -> Vec2 = self.q.inv_rotate(world_point - self.p)
+
+    // The transform taking this frame's coordinates to another's.
+    compose(self, b: Transform) -> Transform = Transform(self.q.rotate(b.p) + self.p, self.q.mul(b.q))
+    inv_compose(self, b: Transform) -> Transform =
+        Transform(self.q.inv_rotate(b.p - self.p), self.q.inverse().mul(b.q))
+end Transform
+
+impl Eq for Transform
+    eq(self, rhs: Transform) -> bool = self.p == rhs.p && self.q == rhs.q
+end Transform
+
+impl Display for Transform
+    display(self, out: *Writer, fmt: FormatSpec) =
+        display_str(str(self.p) + " @ " + str(self.q), out, fmt)
+end Transform
+
+// The transform that moves and turns nothing.
+identity_transform() -> Transform = Transform(Vec2(0.0, 0.0), Rot(1.0, 0.0))
+
+struct Mat22
+    cx: Vec2
+    cy: Vec2
+
+// ## Bounding boxes and planes
+
+struct AABB
+    lower_bound: Vec2
+    upper_bound: Vec2
+
+    center(self) -> Vec2 = Vec2(0.5 * (self.lower_bound.x + self.upper_bound.x),
+                                0.5 * (self.lower_bound.y + self.upper_bound.y))
+    extents(self) -> Vec2 = Vec2(0.5 * (self.upper_bound.x - self.lower_bound.x),
+                                 0.5 * (self.upper_bound.y - self.lower_bound.y))
+    width(self) -> f32 = self.upper_bound.x - self.lower_bound.x
+    height(self) -> f32 = self.upper_bound.y - self.lower_bound.y
+
+    contains(self, b: AABB) -> bool =
+        self.lower_bound.x <= b.lower_bound.x && self.lower_bound.y <= b.lower_bound.y &&
+        b.upper_bound.x <= self.upper_bound.x && b.upper_bound.y <= self.upper_bound.y
+
+    contains_point(self, p: Vec2) -> bool =
+        self.lower_bound.x <= p.x && p.x <= self.upper_bound.x &&
+        self.lower_bound.y <= p.y && p.y <= self.upper_bound.y
+
+    overlaps(self, b: AABB) -> bool =
+        !(b.lower_bound.x > self.upper_bound.x || b.lower_bound.y > self.upper_bound.y ||
+          self.lower_bound.x > b.upper_bound.x || self.lower_bound.y > b.upper_bound.y)
+
+    // The smallest box holding both.
+    union(self, b: AABB) -> AABB = AABB(self.lower_bound.min(b.lower_bound), self.upper_bound.max(b.upper_bound))
+
+    is_valid(self) -> bool
+        val d = self.upper_bound - self.lower_bound
+
+        d.x >= 0.0 && d.y >= 0.0 && self.lower_bound.is_valid() && self.upper_bound.is_valid()
+    end is_valid
+end AABB
+
+impl Eq for AABB
+    eq(self, rhs: AABB) -> bool = self.lower_bound == rhs.lower_bound && self.upper_bound == rhs.upper_bound
+end AABB
+
+impl Display for AABB
+    display(self, out: *Writer, fmt: FormatSpec) =
+        display_str(str(self.lower_bound) + ".." + str(self.upper_bound), out, fmt)
+end AABB
+
+struct Plane
+    normal: Vec2
+    offset: f32
+
+    // How far a point is in front of the plane. Negative is behind it.
+    separation(self, point: Vec2) -> f32 = self.normal.dot(point) - self.offset
+
+    is_valid(self) -> bool = self.normal.is_valid() && self.normal.is_normalized() && self.offset.is_finite()
+end Plane
+
+impl Display for Plane
+    display(self, out: *Writer, fmt: FormatSpec) =
+        display_str(str(self.normal) + " @ " + str(self.offset), out, fmt)
+end Plane

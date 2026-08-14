@@ -16,6 +16,11 @@
 
 module sh.sysl.box2d.c
 
+// The seven math types are declared one module down, for the reason `c.sysl` gives. An import is per
+// *file* rather than per module — the files of a module share a declaration scope and not a set of
+// imports — so this line is not a duplicate of the one there.
+import sh.sysl.box2d.math.{Vec2, CosSin, Rot, Transform, Mat22, AABB, Plane}
+
 // ## Base
 
 extern "b2GetVersion" version() -> Version

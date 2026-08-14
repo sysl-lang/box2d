@@ -1,0 +1,175 @@
+// Making the things a program hands to Box2D: definitions, shapes and filters.
+//
+// ## Why a definition is not built from scratch
+//
+// Every Box2D definition carries an `internal_value` that Box2D checks when the definition comes
+// back, and several carry defaults that are not zero — a shape's density is 1, a body starts awake
+// and enabled, its gravity scale is 1. So each constructor below **starts from Box2D's own default**
+// and overwrites only what it was asked to, rather than filling in a struct by hand.
+//
+// ## And why the defaults are written twice
+//
+// A named parameter needs a default that is a constant, and Box2D's defaults are a function call —
+// so the values on the signatures below are Box2D's, written out. That is exactly the transcription
+// `15 §7` warns about, and it gets exactly the same answer as a transcribed constant does: **a test
+// compares what `body_def()` and its siblings produce with no arguments against
+// `c.default_body_def()` and the rest, field by field.** If Box2D changes a default, or one here was
+// typed wrongly, that test fails and names the field. See `tests.sysl`.
+
+module sh.sysl.box2d
+
+import sh.sysl.box2d.c
+import sh.sysl.box2d.math.{Vec2, Rot, AABB, zero, identity}
+import sysl.slices.as_ptr
+
+// ## Definitions
+
+// A body's starting state.
+//
+// **`kind` defaults to `Static`, which is Box2D's default and is almost never what is wanted** —
+// a static body does not fall, does not move, and weighs nothing. Passing `kind = BodyKind.Dynamic`
+// is the first thing most programs do.
+body_def(kind: BodyKind = BodyKind.Static, position: Vec2 = zero(), rotation: Rot = identity(),
+         linear_velocity: Vec2 = zero(), angular_velocity: f32 = 0.0,
+         linear_damping: f32 = 0.0, angular_damping: f32 = 0.0, gravity_scale: f32 = 1.0,
+         sleep_threshold: f32 = 0.05, enable_sleep: bool = true, is_awake: bool = true,
+         fixed_rotation: bool = false, is_bullet: bool = false, is_enabled: bool = true) -> c.BodyDef
+    var d = c.default_body_def()
+
+    d.kind = kind.code()
+    d.position = position
+    d.rotation = rotation
+    d.linear_velocity = linear_velocity
+    d.angular_velocity = angular_velocity
+    d.linear_damping = linear_damping
+    d.angular_damping = angular_damping
+    d.gravity_scale = gravity_scale
+    d.sleep_threshold = sleep_threshold
+    d.enable_sleep = enable_sleep
+    d.is_awake = is_awake
+    d.fixed_rotation = fixed_rotation
+    d.is_bullet = is_bullet
+    d.is_enabled = is_enabled
+
+    d
+end body_def
+
+// A shape's collision properties.
+//
+// **`is_sensor` turns sensor events on with it**, which Box2D does not: it leaves
+// `enable_sensor_events` false even for a sensor, so a sensor made with the library's defaults
+// reports nothing. A sensor that reports nothing is not a thing anybody wants, so the two travel
+// together here — and `enable_sensor_events` is still separate for the other case, a *visitor* shape
+// that wants to be seen by somebody else's sensor.
+shape_def(density: f32 = 1.0, friction: f32 = 0.6, restitution: f32 = 0.0,
+          rolling_resistance: f32 = 0.0, tangent_speed: f32 = 0.0, material_id: int = 0,
+          filter: c.Filter = c.default_filter(), is_sensor: bool = false,
+          enable_sensor_events: bool = false, enable_contact_events: bool = false,
+          enable_hit_events: bool = false, enable_pre_solve_events: bool = false) -> c.ShapeDef
+    var d = c.default_shape_def()
+
+    d.density = density
+    d.material.friction = friction
+    d.material.restitution = restitution
+    d.material.rolling_resistance = rolling_resistance
+    d.material.tangent_speed = tangent_speed
+    d.material.user_material_id = i32(material_id)
+    d.filter = filter
+    d.is_sensor = is_sensor
+    d.enable_sensor_events = enable_sensor_events || is_sensor
+    d.enable_contact_events = enable_contact_events
+    d.enable_hit_events = enable_hit_events
+    d.enable_pre_solve_events = enable_pre_solve_events
+
+    d
+end shape_def
+
+// What a shape belongs to and what it will collide with.
+//
+// `category_bits` is normally one bit saying what kind of thing this is; `mask_bits` is every kind
+// it should hit. Two shapes collide only if each is in the other's mask. `group_index` overrides
+// both — two shapes with the same negative group never collide however their bits are set, which is
+// how a ragdoll is stopped from colliding with itself.
+filter(category_bits: u64 = c.DEFAULT_CATEGORY_BITS, mask_bits: u64 = c.DEFAULT_MASK_BITS,
+       group_index: int = 0) -> c.Filter = c.Filter(category_bits, mask_bits, i32(group_index))
+
+// The same pair, for a ray cast or an overlap query rather than for a shape.
+query_filter(category_bits: u64 = c.DEFAULT_CATEGORY_BITS,
+             mask_bits: u64 = c.DEFAULT_MASK_BITS) -> c.QueryFilter =
+    c.QueryFilter(category_bits, mask_bits)
+
+// ## Geometry
+//
+// Each of these is in the body's own frame, so a shape at `zero()` sits at the body's origin.
+
+// A disc of `radius` centred at `center`.
+circle(center: Vec2, radius: f32) -> c.Circle = c.Circle(center, radius)
+
+// A rectangle with rounded ends: the set of points within `radius` of the segment from `center1` to
+// `center2`. The cheapest shape to collide after a circle, and what a character is usually made of.
+capsule(center1: Vec2, center2: Vec2, radius: f32) -> c.Capsule = c.Capsule(center1, center2, radius)
+
+// A line with collision on both sides. For a run of these use a `chain` instead, which is one-sided
+// and does not catch a sliding box on its joins.
+segment(point1: Vec2, point2: Vec2) -> c.Segment = c.Segment(point1, point2)
+
+// An axis-aligned rectangle, `2 * half_width` by `2 * half_height`, centred on the body's origin.
+// **The arguments are half-extents**, which is Box2D's convention throughout and the single easiest
+// thing to get wrong: a box for a 1×1 tile is `make_box(0.5, 0.5)`.
+make_box(half_width: f32, half_height: f32) -> c.Polygon = c.make_box(half_width, half_height)
+
+// A square, and a rectangle placed away from the body's origin.
+make_square(half_width: f32) -> c.Polygon = c.make_square(half_width)
+make_offset_box(half_width: f32, half_height: f32, center: Vec2, rotation: Rot = identity()) -> c.Polygon =
+    c.make_offset_box(half_width, half_height, center, rotation)
+
+// A box whose corners are rounded by `radius`, which also makes its collisions cheaper and its
+// resting contacts steadier than a sharp corner's.
+make_rounded_box(half_width: f32, half_height: f32, radius: f32) -> c.Polygon =
+    c.make_rounded_box(half_width, half_height, radius)
+
+// An arbitrary convex polygon through `points`.
+//
+// **`None` where the points do not make one** — fewer than three, all on a line, or all within a
+// weld radius of each other. Box2D's own `b2MakePolygon` traps on an invalid hull rather than
+// answering, so this asks `b2ComputeHull` first and reports the failure as a value; that is the one
+// place in this package where a Box2D assertion is turned into something a program can handle.
+//
+// A hull may have at most eight points. More are welded and dropped until it does.
+make_polygon(points: []Vec2, radius: f32 = 0.0) -> Option[c.Polygon]
+    var hull = c.compute_hull(as_ptr(points), i32(points.len))
+
+    if hull.count < 3 then None else Some(c.make_polygon(&hull, radius))
+end make_polygon
+
+// ## Mass
+//
+// What a shape of a given density would weigh, without making one. Useful for sizing a body's
+// gravity scale or an impulse against the mass it is about to move.
+
+circle_mass(shape: c.Circle, density: f32) -> c.MassData
+    var s = shape
+
+    c.compute_circle_mass(&s, density)
+end circle_mass
+
+capsule_mass(shape: c.Capsule, density: f32) -> c.MassData
+    var s = shape
+
+    c.compute_capsule_mass(&s, density)
+end capsule_mass
+
+polygon_mass(shape: c.Polygon, density: f32) -> c.MassData
+    var s = shape
+
+    c.compute_polygon_mass(&s, density)
+end polygon_mass
+
+// ## Version
+
+// The Box2D this package carries.
+version() -> (int, int, int)
+    val v = c.version()
+
+    (int(v.major), int(v.minor), int(v.revision))
+end version
