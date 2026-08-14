@@ -63,8 +63,10 @@ error: assertion failed: b2Version.minor is not where box2d puts it
 ```
 
 That is `design/15 §7`'s complaint about a transcribed constant — *"correct on one machine, and
-nothing checks it"* — answered for a layout rather than for a number. The file is generated from the
-declarations beside it; regenerate rather than edit.
+nothing checks it"* — answered for a layout rather than for a number.
+
+The file is generated. After adding or reordering any field, run `python3 tools/genlayout.py` from
+the repository root rather than editing it.
 
 ### Nothing is destroyed by hand, and only the world has a destructor
 
