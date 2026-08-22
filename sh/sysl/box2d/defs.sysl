@@ -91,7 +91,7 @@ end shape_def
 // both — two shapes with the same negative group never collide however their bits are set, which is
 // how a ragdoll is stopped from colliding with itself.
 filter(category_bits: u64 = c.DEFAULT_CATEGORY_BITS, mask_bits: u64 = c.DEFAULT_MASK_BITS,
-       group_index: int = 0) -> Filter = c.Filter(category_bits, mask_bits, i32(group_index))
+       group_index: int = 0) -> Filter = Filter(category_bits, mask_bits, i32(group_index))
 
 // The same pair, for a ray cast or an overlap query rather than for a shape.
 query_filter(category_bits: u64 = c.DEFAULT_CATEGORY_BITS,
@@ -103,15 +103,15 @@ query_filter(category_bits: u64 = c.DEFAULT_CATEGORY_BITS,
 // Each of these is in the body's own frame, so a shape at `zero()` sits at the body's origin.
 
 // A disc of `radius` centred at `center`.
-circle(center: Vec2, radius: f32) -> Circle = c.Circle(center, radius)
+circle(center: Vec2, radius: f32) -> Circle = Circle(center, radius)
 
 // A rectangle with rounded ends: the set of points within `radius` of the segment from `center1` to
 // `center2`. The cheapest shape to collide after a circle, and what a character is usually made of.
-capsule(center1: Vec2, center2: Vec2, radius: f32) -> Capsule = c.Capsule(center1, center2, radius)
+capsule(center1: Vec2, center2: Vec2, radius: f32) -> Capsule = Capsule(center1, center2, radius)
 
 // A line with collision on both sides. For a run of these use a `chain` instead, which is one-sided
 // and does not catch a sliding box on its joins.
-segment(point1: Vec2, point2: Vec2) -> Segment = c.Segment(point1, point2)
+segment(point1: Vec2, point2: Vec2) -> Segment = Segment(point1, point2)
 
 // An axis-aligned rectangle, `2 * half_width` by `2 * half_height`, centred on the body's origin.
 // **The arguments are half-extents**, which is Box2D's convention throughout and the single easiest

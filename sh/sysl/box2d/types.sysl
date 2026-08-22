@@ -21,11 +21,11 @@
 // program iterating them needs.
 //
 // **Five of these names are also variants of `ShapeKind` or `JointKind`** — `Circle`, `Capsule`,
-// `Segment`, `Polygon` and `Filter` — and in *call* position the variant wins, so `Circle(c, r)`
-// is read as the variant and refused for taking arguments. In *type* position, which is what these
-// names are for, there is no such contest and the alias resolves. Build one with `circle`,
-// `capsule`, `segment`, `filter` or `make_box` in `defs.sysl` rather than by naming the struct;
-// those are the pleasant spellings anyway, and they are what every example uses.
+// `Segment`, `Polygon` and `Filter` — and that is settled by what the site expects: a position
+// asking for the enum reads the variant, and every other reads the struct. So `Circle(centre, r)`
+// builds a shape and `ShapeKind.Circle` names the kind. The lowercase `circle`, `capsule`,
+// `segment`, `filter` and `make_box` in `defs.sysl` are still the pleasant spellings, and are what
+// every example uses.
 
 module sh.sysl.box2d
 

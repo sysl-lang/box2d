@@ -27,7 +27,7 @@ print(ball.position())        -- (0.0, 0.5), resting on the ground
 
 ```hocon
 dependencies {
-  box2d { git = "github.com/sysl-lang/box2d", version = "0.1.1" }
+  box2d { git = "github.com/sysl-lang/box2d", version = "0.1.2" }
 }
 ```
 
@@ -61,14 +61,15 @@ check it by handing a value built above to a declaration written below. What is 
 *public signature of the top module names*: everything else stays in `c`, because nothing above ever
 hands one to a caller.
 
-This is what needs sysl **0.0.67**, the release a transparent alias over a struct arrived in, and
-`package.hocon` states that floor.
+This is what needs sysl **0.0.67**, the release a transparent alias over a struct arrived in.
+Building the five names that are also enum variants needs **0.0.69**, and `package.hocon` states
+that floor.
 
-**Build a shape with `circle`, `capsule`, `segment` or `make_box` rather than by naming the struct.**
-Five of the aliased names — `Circle`, `Capsule`, `Segment`, `Polygon`, `Filter` — are also variants
-of `ShapeKind` or `JointKind`, and in call position the variant wins, so `Circle(zero(), 0.5)` is
-read as the variant and refused for taking arguments. In type position, which is what the names are
-for, there is no contest. The lowercase builders in `defs.sysl` are the pleasant spelling anyway.
+**Build a shape with `circle`, `capsule`, `segment` or `make_box`** — the lowercase builders in
+`defs.sysl` fill in the defaults and are what every example uses. Naming the struct works too: five
+of the aliased names are also variants of `ShapeKind` or `JointKind`, and which one a site means is
+settled by what it expects, so `Circle(zero(), 0.5)` builds a shape and `ShapeKind.Circle` names the
+kind.
 
 ## Three things worth knowing before reading the source
 
