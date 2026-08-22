@@ -22,6 +22,38 @@ version_is_pinned()
     assert_eq(minor, 1)
 end version_is_pinned
 
+// -- the names this module publishes ---------------------------------------------------------------
+
+// A declaration written against the name in `c`, which is what makes the test below a type check
+// rather than a size comparison: it takes a value built through the alias, and only compiles at all
+// if the two names are one type.
+private radius_of(s: *c.Circle) -> f32 = s[0].radius
+
+@test("a name in types.sysl is the declaration below it and not a copy of one")
+an_alias_is_the_type_it_names()
+    assert_eq(sizeof(Circle), sizeof(c.Circle))
+    assert_eq(sizeof(Capsule), sizeof(c.Capsule))
+    assert_eq(sizeof(Segment), sizeof(c.Segment))
+    assert_eq(sizeof(Polygon), sizeof(c.Polygon))
+    assert_eq(sizeof(ShapeId), sizeof(c.ShapeId))
+    assert_eq(sizeof(ShapeDef), sizeof(c.ShapeDef))
+    assert_eq(sizeof(MassData), sizeof(c.MassData))
+
+    // `circle` builds through the declaration below and the result satisfies the name above, which
+    // is the direction every call in this package goes.
+    var s: Circle = circle(zero(), 0.5)
+
+    assert_eq(radius_of(&s), 0.5)
+
+    // And a value that came back from Box2D itself, which is the direction a caller reads.
+    val w = world()
+    val b = w.body(body_def())
+    val shape = b.circle(shape_def(), s)
+    val back: Circle = shape.as_circle()
+
+    assert_eq(back.radius, 0.5)
+end an_alias_is_the_type_it_names
+
 // -- vectors --------------------------------------------------------------------------------------
 
 @test("the operators are the arithmetic they look like")
@@ -398,7 +430,7 @@ end filtering_decides_collision
 
 // Whether a ball dropped onto a floor ends up below it. The two filters are the only difference
 // between the runs.
-private falls_through(ground_filter: c.Filter, ball_filter: c.Filter) -> bool
+private falls_through(ground_filter: Filter, ball_filter: Filter) -> bool
     val w = world()
     val ground = w.body(body_def(position = Vec2(0.0, -1.0)))
 
@@ -816,13 +848,13 @@ end a_ray_reports_every_hit
 // What the custom filter saw, kept in module storage so the test can check it afterwards. A callback
 // crossing from C cannot capture, which is why this is not a closure.
 var filter_calls: int = 0
-var seen_a: c.ShapeId = c.ShapeId(0, 0, 0)
-var seen_b: c.ShapeId = c.ShapeId(0, 0, 0)
+var seen_a: ShapeId = ShapeId(0, 0, 0)
+var seen_b: ShapeId = ShapeId(0, 0, 0)
 
 // Two `b2ShapeId` by value and a pointer — exactly the signature `0137` reported reading as garbage
 // before 0.0.55.
 @export
-refuse_everything(a: c.ShapeId, b: c.ShapeId, ctx: *u8) -> bool
+refuse_everything(a: ShapeId, b: ShapeId, ctx: *u8) -> bool
     filter_calls += 1
     seen_a = a
     seen_b = b

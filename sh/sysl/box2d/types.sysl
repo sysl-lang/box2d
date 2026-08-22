@@ -1,0 +1,84 @@
+// Box2D's own structs, named from the layer an application imports.
+//
+// **A transparent alias is a second spelling, not a second type.** `type Polygon = c.Polygon`
+// declares nothing of its own: a value built through either name is the same value, crosses to C in
+// the same registers, and satisfies both names everywhere one of them is written. This file costs
+// nothing at run time.
+//
+// **Why an alias rather than a move.** The declarations below are what `c`'s own signatures take —
+// `b2CreatePolygonShape` is written against a `*Polygon` — and a module may not depend on a module
+// that depends on it, so they cannot be lifted the way a `c const` block can. Naming them from above
+// is the other half of the same idea, and needs sysl 0.0.67.
+//
+// **What is here is what a public signature of this module names**, which is the test the split
+// actually asks: a program writing a ray-cast callback has to spell `ShapeId`, and one reading a
+// contact has to spell `ContactBeginTouchEvent`. Everything else in `c` stays there, because nothing
+// above ever hands one to a caller.
+//
+// **Two names are missing and both are taken.** `ContactEvents` and `SensorEvents` are declared in
+// `box2d.sysl` as this layer's own wrappers, holding slices of the raw events below; aliasing the
+// raw ones to those names would hide the wrappers. Their element types are here, which is what a
+// program iterating them needs.
+//
+// **Five of these names are also variants of `ShapeKind` or `JointKind`** — `Circle`, `Capsule`,
+// `Segment`, `Polygon` and `Filter` — and in *call* position the variant wins, so `Circle(c, r)`
+// is read as the variant and refused for taking arguments. In *type* position, which is what these
+// names are for, there is no such contest and the alias resolves. Build one with `circle`,
+// `capsule`, `segment`, `filter` or `make_box` in `defs.sysl` rather than by naming the struct;
+// those are the pleasant spellings anyway, and they are what every example uses.
+
+module sh.sysl.box2d
+
+import sh.sysl.box2d.c
+
+// ## The handles
+//
+// Each is an index and a generation rather than a pointer, which is what makes a stale one
+// detectable rather than a use-after-free. `World`, `Body`, `Shape`, `Chain` and `Joint` wrap them,
+// but a callback handed to Box2D is called with the raw id and has to be able to say so.
+
+type WorldId = c.WorldId
+type BodyId = c.BodyId
+type ShapeId = c.ShapeId
+type ChainId = c.ChainId
+type JointId = c.JointId
+
+// ## The shapes
+//
+// A polygon is a fixed 144 bytes whatever its vertex count, which is why all four are passed and
+// returned by value everywhere: Box2D never allocates one.
+
+type Circle = c.Circle
+type Capsule = c.Capsule
+type Segment = c.Segment
+type Polygon = c.Polygon
+
+// ## What describes a thing before it exists
+//
+// `body_def`, `shape_def` and `filter` in `defs.sysl` build these with every field defaulted to
+// Box2D's own default, so a program names the type only when it wants to hold one.
+
+type BodyDef = c.BodyDef
+type ShapeDef = c.ShapeDef
+type Filter = c.Filter
+type QueryFilter = c.QueryFilter
+type SurfaceMaterial = c.SurfaceMaterial
+
+// ## What comes back
+
+type MassData = c.MassData
+type RayCastInput = c.RayCastInput
+type CastOutput = c.CastOutput
+type Manifold = c.Manifold
+type ManifoldPoint = c.ManifoldPoint
+
+// ## The events a step leaves behind
+//
+// Each is a view into the world's own storage and is valid until the next `step`.
+
+type BodyMoveEvent = c.BodyMoveEvent
+type ContactBeginTouchEvent = c.ContactBeginTouchEvent
+type ContactEndTouchEvent = c.ContactEndTouchEvent
+type ContactHitEvent = c.ContactHitEvent
+type SensorBeginTouchEvent = c.SensorBeginTouchEvent
+type SensorEndTouchEvent = c.SensorEndTouchEvent

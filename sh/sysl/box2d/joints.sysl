@@ -35,7 +35,7 @@ import sh.sysl.box2d.math.{Vec2, Rot, zero, identity}
 // What every joint has, whichever of the eight it is.
 struct Joint
     world: &World
-    id: c.JointId
+    id: JointId
 
     kind(self) -> JointKind = JointKind.of(c.joint_get_type(self.id))
     body_a(self) -> Body = Body(self.world, c.joint_get_body_a(self.id))

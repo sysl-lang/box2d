@@ -14,7 +14,7 @@
 //     ground.polygon(shape_def(), make_box(50.0, 10.0))
 //
 //     val ball = w.body(body_def(kind = BodyKind.Dynamic, position = Vec2(0.0, 4.0)))
-//     ball.circle(shape_def(density = 1.0, friction = 0.3), Circle(zero(), 0.5))
+//     ball.circle(shape_def(density = 1.0, friction = 0.3), circle(zero(), 0.5))
 //
 //     for _ in 0..<90
 //         w.step(1.0 / 60.0)
@@ -68,7 +68,7 @@ import sh.sysl.box2d.math.{Vec2, Rot, Transform, AABB, Plane, CosSin, zero, iden
 // **Nothing is imported from `c` unqualified, deliberately.** Three of Box2D's geometry types share
 // a name with a variant of an enumeration below — a shape is a `Circle` and its kind is
 // `ShapeKind.Circle` — and a variant may not share a name with a type in the same module. Rather
-// than spell either of them worse, this module says `c.Circle` in its own signatures and supplies
+// than spell either of them worse, this module says `Circle` in its own signatures and supplies
 // the constructors a program calls, so ordinary code writes `circle(zero(), 0.5)` and names no type
 // at all.
 import sysl.slices.as_mut_ptr
@@ -232,7 +232,7 @@ end JointKind
 
 // A simulation. Everything else in this package belongs to one.
 struct World
-    id: c.WorldId
+    id: WorldId
 
     // ### Stepping
     //
@@ -246,7 +246,7 @@ struct World
 
     // ### Making things
 
-    body(&self, def: c.BodyDef) -> Body = Body(self, c.create_body(self.id, &def))
+    body(&self, def: BodyDef) -> Body = Body(self, c.create_body(self.id, &def))
 
     // ### What happened during the last step
     //
@@ -269,7 +269,7 @@ struct World
 
     // Every body the solver moved this step, as a contiguous array — which is what an application
     // walks to update its own sprites, rather than asking each body for its transform in turn.
-    move_events(&self) -> []const c.BodyMoveEvent
+    move_events(&self) -> []const BodyMoveEvent
         val e = c.world_get_body_events(self.id)
 
         e.move_events[0..<usize(e.move_count)]
@@ -327,12 +327,12 @@ struct World
     // **This is a broad-phase question and answers in bounding boxes**, so a shape whose box
     // overlaps but whose geometry does not is still reported. `overlap_shape` asks the exact
     // question and costs more.
-    overlap_aabb(&self, box: AABB, filter: c.QueryFilter = c.default_query_filter()) -> []Shape
-        var found: Buf[c.ShapeId] = buf()
+    overlap_aabb(&self, box: AABB, filter: QueryFilter = c.default_query_filter()) -> []Shape
+        var found: Buf[ShapeId] = buf()
 
         c.world_overlap_aabb(self.id, box, filter, &collect_shape, ptr_cast(&found))
 
-        var out: []Shape = [Shape(self, c.ShapeId(0, 0, 0)); found.len()]
+        var out: []Shape = [Shape(self, ShapeId(0, 0, 0)); found.len()]
 
         for i in 0..<found.len() do out[i] = Shape(self, found[i])
 
@@ -340,20 +340,20 @@ struct World
     end overlap_aabb
 
     // The same, with the caller's own visitor. Returning false from it stops the query.
-    overlap_aabb_with(&self, box: AABB, visit: *extern(c.ShapeId, *u8) -> bool, context: *u8,
-                      filter: c.QueryFilter = c.default_query_filter()) =
+    overlap_aabb_with(&self, box: AABB, visit: *extern(ShapeId, *u8) -> bool, context: *u8,
+                      filter: QueryFilter = c.default_query_filter()) =
         c.world_overlap_aabb(self.id, box, filter, visit, context)
 
     // Everything a ray from `origin` along `translation` passes through, in the order Box2D found
     // them, which is **not** sorted by distance.
     cast_ray(&self, origin: Vec2, translation: Vec2,
-             filter: c.QueryFilter = c.default_query_filter()) -> []RayHit
+             filter: QueryFilter = c.default_query_filter()) -> []RayHit
         var into = CastCollector(buf(), buf(), buf(), buf())
 
         c.world_cast_ray(self.id, origin, translation, filter, &collect_cast, ptr_cast(&into))
 
         val n = into.hits.len()
-        var out: []RayHit = [RayHit(Shape(self, c.ShapeId(0, 0, 0)), zero(), zero(), 0.0); n]
+        var out: []RayHit = [RayHit(Shape(self, ShapeId(0, 0, 0)), zero(), zero(), 0.0); n]
 
         for i in 0..<n
             out[i] = RayHit(Shape(self, into.hits[i]), into.points[i], into.normals[i], into.fractions[i])
@@ -364,7 +364,7 @@ struct World
     // The first thing the ray hits, or `None`. This is the one a line of sight or a bullet wants,
     // and it is Box2D's own `b2World_CastRayClosest` rather than a sort of `cast_ray`'s answer.
     cast_ray_closest(&self, origin: Vec2, translation: Vec2,
-                     filter: c.QueryFilter = c.default_query_filter()) -> Option[RayHit]
+                     filter: QueryFilter = c.default_query_filter()) -> Option[RayHit]
         val r = c.world_cast_ray_closest(self.id, origin, translation, filter)
 
         if r.hit then Some(RayHit(Shape(self, r.shape_id), r.point, r.normal, r.fraction)) else None
@@ -374,8 +374,8 @@ struct World
     // this shape and carries on, `0` stops the cast, a fraction clips the ray to that point, and `1`
     // keeps the ray at full length. Clipping is what makes a closest-hit search cheap.
     cast_ray_with(&self, origin: Vec2, translation: Vec2,
-                  visit: *extern(c.ShapeId, Vec2, Vec2, f32, *u8) -> f32, context: *u8,
-                  filter: c.QueryFilter = c.default_query_filter()) =
+                  visit: *extern(ShapeId, Vec2, Vec2, f32, *u8) -> f32, context: *u8,
+                  filter: QueryFilter = c.default_query_filter()) =
         c.world_cast_ray(self.id, origin, translation, filter, visit, context)
 
     // ## The two solver callbacks
@@ -385,12 +385,12 @@ struct World
 
     // Decide, per pair, whether two shapes collide. Called only for pairs where at least one shape
     // has custom filtering enabled, and only for awake dynamic bodies.
-    set_custom_filter(&self, fcn: *extern(c.ShapeId, c.ShapeId, *u8) -> bool, context: *u8) =
+    set_custom_filter(&self, fcn: *extern(ShapeId, ShapeId, *u8) -> bool, context: *u8) =
         c.world_set_custom_filter_callback(self.id, fcn, context)
 
     // Inspect a contact after it is updated and before it is solved, and return false to switch it
     // off for this step. One-way platforms are built from this.
-    set_pre_solve(&self, fcn: *extern(c.ShapeId, c.ShapeId, *c.Manifold, *u8) -> bool, context: *u8) =
+    set_pre_solve(&self, fcn: *extern(ShapeId, ShapeId, *Manifold, *u8) -> bool, context: *u8) =
         c.world_set_pre_solve_callback(self.id, fcn, context)
 
     // How two shapes' frictions combine. The default is `sqrt(a * b)`; a game wanting ice that stays
@@ -444,7 +444,7 @@ end world
 // **It holds the world**, so a body cannot outlive the simulation it belongs to. See the header.
 struct Body
     world: &World
-    id: c.BodyId
+    id: BodyId
 
     // ### Attaching geometry
     //
@@ -452,13 +452,13 @@ struct Body
     // through its body, or through the id in a contact event — but it is what `sensor_overlaps` and
     // the per-shape setters are called on.
 
-    circle(self, def: c.ShapeDef, shape: c.Circle) -> Shape =
+    circle(self, def: ShapeDef, shape: Circle) -> Shape =
         Shape(self.world, c.create_circle_shape(self.id, &def, &shape))
-    capsule(self, def: c.ShapeDef, shape: c.Capsule) -> Shape =
+    capsule(self, def: ShapeDef, shape: Capsule) -> Shape =
         Shape(self.world, c.create_capsule_shape(self.id, &def, &shape))
-    segment(self, def: c.ShapeDef, shape: c.Segment) -> Shape =
+    segment(self, def: ShapeDef, shape: Segment) -> Shape =
         Shape(self.world, c.create_segment_shape(self.id, &def, &shape))
-    polygon(self, def: c.ShapeDef, shape: c.Polygon) -> Shape =
+    polygon(self, def: ShapeDef, shape: Polygon) -> Shape =
         Shape(self.world, c.create_polygon_shape(self.id, &def, &shape))
 
     // ### Where it is
@@ -512,8 +512,8 @@ struct Body
     rotational_inertia(self) -> f32 = c.body_get_rotational_inertia(self.id)
     local_center_of_mass(self) -> Vec2 = c.body_get_local_center_of_mass(self.id)
     world_center_of_mass(self) -> Vec2 = c.body_get_world_center_of_mass(self.id)
-    mass_data(self) -> c.MassData = c.body_get_mass_data(self.id)
-    set_mass_data(self, m: c.MassData) = c.body_set_mass_data(self.id, m)
+    mass_data(self) -> MassData = c.body_get_mass_data(self.id)
+    set_mass_data(self, m: MassData) = c.body_set_mass_data(self.id, m)
     apply_mass_from_shapes(self) = c.body_apply_mass_from_shapes(self.id)
 
     // ### What kind of body it is
@@ -564,9 +564,9 @@ struct Body
     // than handing back a view Box2D could invalidate.
     shapes(self) -> []Shape
         val n = c.body_get_shape_count(self.id)
-        var ids: []c.ShapeId = [c.ShapeId(0, 0, 0); usize(n)]
+        var ids: []ShapeId = [ShapeId(0, 0, 0); usize(n)]
         val got = usize(c.body_get_shapes(self.id, as_mut_ptr(ids[..]), n))
-        var out: []Shape = [Shape(self.world, c.ShapeId(0, 0, 0)); got]
+        var out: []Shape = [Shape(self.world, ShapeId(0, 0, 0)); got]
 
         for i in 0..<got do out[i] = Shape(self.world, ids[i])
 
@@ -616,7 +616,7 @@ end Body
 // Geometry attached to a body, with the properties a collision uses.
 struct Shape
     world: &World
-    id: c.ShapeId
+    id: ShapeId
 
     kind(self) -> ShapeKind = ShapeKind.of(c.shape_get_type(self.id))
     body(self) -> Body = Body(self.world, c.shape_get_body(self.id))
@@ -630,11 +630,11 @@ struct Shape
     set_friction(self, f: f32) = c.shape_set_friction(self.id, f)
     restitution(self) -> f32 = c.shape_get_restitution(self.id)
     set_restitution(self, r: f32) = c.shape_set_restitution(self.id, r)
-    surface_material(self) -> c.SurfaceMaterial = c.shape_get_surface_material(self.id)
-    set_surface_material(self, m: c.SurfaceMaterial) = c.shape_set_surface_material(self.id, m)
+    surface_material(self) -> SurfaceMaterial = c.shape_get_surface_material(self.id)
+    set_surface_material(self, m: SurfaceMaterial) = c.shape_set_surface_material(self.id, m)
 
-    filter(self) -> c.Filter = c.shape_get_filter(self.id)
-    set_filter(self, f: c.Filter) = c.shape_set_filter(self.id, f)
+    filter(self) -> Filter = c.shape_get_filter(self.id)
+    set_filter(self, f: Filter) = c.shape_set_filter(self.id, f)
 
     // ### Sensors and events
     //
@@ -657,34 +657,34 @@ struct Shape
     test_point(self, point: Vec2) -> bool = c.shape_test_point(self.id, point)
     closest_point(self, target: Vec2) -> Vec2 = c.shape_get_closest_point(self.id, target)
     aabb(self) -> AABB = c.shape_get_aabb(self.id)
-    mass_data(self) -> c.MassData = c.shape_get_mass_data(self.id)
+    mass_data(self) -> MassData = c.shape_get_mass_data(self.id)
 
     // A ray in this shape's own world position. `hit` is false if it misses.
-    ray_cast(self, origin: Vec2, translation: Vec2, max_fraction: f32 = 1.0) -> c.CastOutput
-        var input = c.RayCastInput(origin, translation, max_fraction)
+    ray_cast(self, origin: Vec2, translation: Vec2, max_fraction: f32 = 1.0) -> CastOutput
+        var input = RayCastInput(origin, translation, max_fraction)
 
         c.shape_ray_cast(self.id, &input)
     end ray_cast
 
     // The geometry itself, in the body's frame. **Each asks Box2D for a specific kind and Box2D
     // traps if the shape is another**, so `kind()` is what decides which to call.
-    as_circle(self) -> c.Circle = c.shape_get_circle(self.id)
-    as_capsule(self) -> c.Capsule = c.shape_get_capsule(self.id)
-    as_segment(self) -> c.Segment = c.shape_get_segment(self.id)
-    as_polygon(self) -> c.Polygon = c.shape_get_polygon(self.id)
+    as_circle(self) -> Circle = c.shape_get_circle(self.id)
+    as_capsule(self) -> Capsule = c.shape_get_capsule(self.id)
+    as_segment(self) -> Segment = c.shape_get_segment(self.id)
+    as_polygon(self) -> Polygon = c.shape_get_polygon(self.id)
 
-    set_circle(self, s: c.Circle) = c.shape_set_circle(self.id, &s)
-    set_capsule(self, s: c.Capsule) = c.shape_set_capsule(self.id, &s)
-    set_segment(self, s: c.Segment) = c.shape_set_segment(self.id, &s)
-    set_polygon(self, s: c.Polygon) = c.shape_set_polygon(self.id, &s)
+    set_circle(self, s: Circle) = c.shape_set_circle(self.id, &s)
+    set_capsule(self, s: Capsule) = c.shape_set_capsule(self.id, &s)
+    set_segment(self, s: Segment) = c.shape_set_segment(self.id, &s)
+    set_polygon(self, s: Polygon) = c.shape_set_polygon(self.id, &s)
 
     // Every shape currently overlapping this sensor. Empty unless this shape is a sensor with its
     // events enabled, and refreshed by each step.
     sensor_overlaps(self) -> []Shape
         val n = c.shape_get_sensor_capacity(self.id)
-        var ids: []c.ShapeId = [c.ShapeId(0, 0, 0); usize(n)]
+        var ids: []ShapeId = [ShapeId(0, 0, 0); usize(n)]
         val got = usize(c.shape_get_sensor_overlaps(self.id, as_mut_ptr(ids[..]), n))
-        var out: []Shape = [Shape(self.world, c.ShapeId(0, 0, 0)); got]
+        var out: []Shape = [Shape(self.world, ShapeId(0, 0, 0)); got]
 
         for i in 0..<got do out[i] = Shape(self.world, ids[i])
 
@@ -716,7 +716,7 @@ end Shape
 // along them catches on the joins.
 struct Chain
     world: &World
-    id: c.ChainId
+    id: ChainId
 
     segment_count(self) -> int = int(c.chain_get_segment_count(self.id))
     friction(self) -> f32 = c.chain_get_friction(self.id)
@@ -734,16 +734,16 @@ end Chain
 struct ContactEvents
     // Pairs that started touching. Each carries the manifold as it was before the solver ran, so
     // every impulse in it is zero.
-    began: []const c.ContactBeginTouchEvent
+    began: []const ContactBeginTouchEvent
 
     // Pairs that stopped touching. **Either shape may already have been destroyed** — that is often
     // *why* the contact ended — so `Shape.is_valid` is worth asking before acting on one.
-    ended: []const c.ContactEndTouchEvent
+    ended: []const ContactEndTouchEvent
 
     // Collisions faster than the world's hit threshold, with the point and the approach speed. This
     // is what a sound effect is driven from.
-    hits: []const c.ContactHitEvent
+    hits: []const ContactHitEvent
 
 struct SensorEvents
-    began: []const c.SensorBeginTouchEvent
-    ended: []const c.SensorEndTouchEvent
+    began: []const SensorBeginTouchEvent
+    ended: []const SensorEndTouchEvent

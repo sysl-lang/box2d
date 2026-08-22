@@ -16,15 +16,21 @@
 // arrived against `sysl.sum`, and compiles it as more modules.
 //
 //     dependencies {
-//       box2d { git = "github.com/sysl-lang/box2d", version = "0.1.0" }
+//       box2d { git = "github.com/sysl-lang/box2d", version = "0.1.1" }
 //     }
 //
 // The coordinate is identity rather than a URL, so it carries no `https://`, and the version is the
-// tag `v0.1.0` on this repository.
+// tag `v0.1.1` on this repository.
 
 package {
   name    = "box2d"
-  version = "0.1.0"
+  version = "0.1.1"
+
+  // **The oldest compiler this builds with, and it is a released one.** `types.sysl` names Box2D's
+  // shapes, ids, defs and events from the pleasant layer with `type Polygon = c.Polygon` — a
+  // transparent alias over a struct, which arrived in 0.0.67. An older compiler refuses the file
+  // outright, so the floor is here rather than left to a reader to work out from a parse error.
+  sysl = "0.0.67"
 }
 
 // **There is no shim.c, and that is the headline fact about this binding.**

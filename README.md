@@ -27,7 +27,7 @@ print(ball.position())        -- (0.0, 0.5), resting on the ground
 
 ```hocon
 dependencies {
-  box2d { git = "github.com/sysl-lang/box2d", version = "0.1.0" }
+  box2d { git = "github.com/sysl-lang/box2d", version = "0.1.1" }
 }
 ```
 
@@ -41,7 +41,34 @@ it. There is no include path to pass and no `requires { headers }` to answer.
 |---|---|
 | `sh.sysl.box2d` | the API — `World`, `Body`, `Shape`, `Chain`, the eight joints, queries, events |
 | `sh.sysl.box2d.math` | `Vec2`, `Rot`, `Transform`, `AABB`, with operators. Pure sysl, usable alone |
-| `sh.sysl.box2d.c` | Box2D declared verbatim, and Box2D's own C. Reach for it deliberately |
+| `sh.sysl.box2d.c` | Box2D declared verbatim, and Box2D's own C. **An application should not need it** |
+
+### The structs an application names are named from the top module
+
+Box2D's shapes, ids, defs and events are declared in `c`, because `c`'s own signatures take them and
+a module may not depend on a module that depends on it. They are named from `sh.sysl.box2d` anyway,
+as transparent aliases in `types.sysl`:
+
+```sysl
+type Polygon = c.Polygon
+type ShapeId = c.ShapeId
+type ContactHitEvent = c.ContactHitEvent
+```
+
+An alias declares no type. A value built through either name is the same value, crosses to C in the
+same registers, and satisfies both names — so this costs nothing at run time, and the package's tests
+check it by handing a value built above to a declaration written below. What is aliased is what a
+*public signature of the top module names*: everything else stays in `c`, because nothing above ever
+hands one to a caller.
+
+This is what needs sysl **0.0.67**, the release a transparent alias over a struct arrived in, and
+`package.hocon` states that floor.
+
+**Build a shape with `circle`, `capsule`, `segment` or `make_box` rather than by naming the struct.**
+Five of the aliased names — `Circle`, `Capsule`, `Segment`, `Polygon`, `Filter` — are also variants
+of `ShapeKind` or `JointKind`, and in call position the variant wins, so `Circle(zero(), 0.5)` is
+read as the variant and refused for taking arguments. In type position, which is what the names are
+for, there is no contest. The lowercase builders in `defs.sysl` are the pleasant spelling anyway.
 
 ## Three things worth knowing before reading the source
 
@@ -104,7 +131,7 @@ none is written.**
 
 ```sysl
 @export
-refuse_everything(a: c.ShapeId, b: c.ShapeId, ctx: *u8) -> bool = false
+refuse_everything(a: ShapeId, b: ShapeId, ctx: *u8) -> bool = false
 
 w.set_custom_filter(&refuse_everything, null)
 ```
@@ -136,7 +163,7 @@ linear algebra library in pure sysl that happens to have Box2D's exact layouts.
 sysl test .
 ```
 
-**51 tests, 0 failures.** Most of them run a simulation and read a number back, because a binding
+**52 tests, 0 failures.** Most of them run a simulation and read a number back, because a binding
 can be wrong in a way that compiles, links and returns without complaint. Two of them measure the
 callback path against the shipped compiler through a real Box2D registration rather than a probe.
 

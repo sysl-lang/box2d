@@ -13,8 +13,8 @@
 // address, and Box2D calls it directly:
 //
 //     @export
-//     private collect(shape: c.ShapeId, ctx: *u8) -> bool
-//         val found: *Buf[c.ShapeId] = ptr_cast(ctx)
+//     private collect(shape: ShapeId, ctx: *u8) -> bool
+//         val found: *Buf[ShapeId] = ptr_cast(ctx)
 //
 //         found[0].push(shape)
 //         true
@@ -69,8 +69,8 @@ end RayHit
 // function nobody outside can reach. They are named for what they are rather than hidden.
 
 @export
-collect_shape(shape: c.ShapeId, ctx: *u8) -> bool
-    val found: *Buf[c.ShapeId] = ptr_cast(ctx)
+collect_shape(shape: ShapeId, ctx: *u8) -> bool
+    val found: *Buf[ShapeId] = ptr_cast(ctx)
 
     found[0].push(shape)
     true
@@ -79,7 +79,7 @@ end collect_shape
 // The gathering state a cast visitor writes into. It carries the world so that each hit can be
 // turned into a `Shape` as it arrives rather than in a second pass.
 struct CastCollector
-    hits: Buf[c.ShapeId]
+    hits: Buf[ShapeId]
     points: Buf[Vec2]
     normals: Buf[Vec2]
     fractions: Buf[f32]
@@ -87,7 +87,7 @@ struct CastCollector
 // Returning 1.0 means "do not clip the ray, keep going", which is what collects every hit rather
 // than only the nearest.
 @export
-collect_cast(shape: c.ShapeId, point: Vec2, normal: Vec2, fraction: f32, ctx: *u8) -> f32
+collect_cast(shape: ShapeId, point: Vec2, normal: Vec2, fraction: f32, ctx: *u8) -> f32
     val into: *CastCollector = ptr_cast(ctx)
 
     into[0].hits.push(shape)
