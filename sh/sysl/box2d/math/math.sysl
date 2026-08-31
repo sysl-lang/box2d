@@ -118,6 +118,12 @@ end Vec2
 // no longer the rule. Coherence now counts the trait's **arguments** as well as its subject, so a
 // block naming `Vec2` in its argument list has a home in the module that declares `Vec2`, which is
 // this one. It forwards to the block above rather than multiplying again.
+//
+// **The count is written `2.0f32` rather than `2.0`.** A bare float literal on the left has nothing
+// to read its width off, so it is a `real` before the operator is looked at, and there is no block
+// for one; on the right it takes the `f32` the parameter names. The integers avoid this because
+// `Integer` is a family the compiler closes and one block covers every width of it -- the floats are
+// two ordinary types, so there is no such block to write.
 impl Mul[Vec2, Vec2] for f32
     mul(self, v: Vec2) -> Vec2 = v * self
 end f32

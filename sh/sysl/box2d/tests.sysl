@@ -65,7 +65,11 @@ vector_arithmetic()
     assert_eq(a - b, Vec2(2.0, 2.0))
     assert_eq(-a, Vec2(-3.0, -4.0))
     assert_eq(a * 2.0, Vec2(6.0, 8.0))
-    assert_eq(2.0 * a, a * 2.0)
+    // The count on the left is written `2.0f32`, not `2.0`. A `Vec2` is `f32`, and a bare float
+    // literal on the LEFT has nothing to read its width off -- it is a `real` before the operator is
+    // looked at -- where on the right it takes the width the parameter names. `linalg` writes the
+    // same suffix for the same reason.
+    assert_eq(2.0f32 * a, a * 2.0)
     assert_eq(a.length(), 5.0)
     assert_eq(a.length_squared(), 25.0)
     assert_eq(a.dot(b), 11.0)
