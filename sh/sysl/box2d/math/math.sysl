@@ -108,12 +108,19 @@ impl Neg for Vec2
     neg(self) -> Vec2 = Vec2(-self.x, -self.y)
 end Vec2
 
-// **There is no scalar on the left**, for the reason `library/sysl/math/complex` gives about the
-// same absence: `2.0 * v` would need an `impl Mul[Vec2] for f32`, and `14 §5` puts an `impl` in the
-// module declaring the trait or the type, neither of which is this one. `v * 2.0` is what compiles.
 impl Mul[f32] for Vec2
     mul(self, rhs: f32) -> Vec2 = Vec2(self.x * rhs, self.y * rhs)
 end Vec2
+
+// **The scalar on the left, which this file said was impossible until sysl 0.0.96.** The claim was
+// that `2.0 * v` needs an `impl Mul[Vec2] for f32` and that `14 §5` puts an `impl` in the module
+// declaring the trait or the type, neither of which is `f32`'s -- true of the rule as it stood, and
+// no longer the rule. Coherence now counts the trait's **arguments** as well as its subject, so a
+// block naming `Vec2` in its argument list has a home in the module that declares `Vec2`, which is
+// this one. It forwards to the block above rather than multiplying again.
+impl Mul[Vec2, Vec2] for f32
+    mul(self, v: Vec2) -> Vec2 = v * self
+end f32
 
 impl Eq for Vec2
     eq(self, rhs: Vec2) -> bool = self.x == rhs.x && self.y == rhs.y

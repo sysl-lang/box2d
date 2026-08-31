@@ -27,7 +27,7 @@ print(ball.position())        -- (0.0, 0.5), resting on the ground
 
 ```hocon
 dependencies {
-  box2d { git = "github.com/sysl-lang/box2d", version = "0.1.2" }
+  box2d { git = "github.com/sysl-lang/box2d", version = "0.1.3" }
 }
 ```
 
