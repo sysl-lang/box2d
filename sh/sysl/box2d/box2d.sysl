@@ -332,7 +332,7 @@ struct World
 
         c.world_overlap_aabb(self.id, box, filter, &collect_shape, ptr_cast(&found))
 
-        var out: []Shape = [Shape(self, ShapeId(0, 0, 0)); found.len()]
+        val out: []Shape = [Shape(self, ShapeId(0, 0, 0)); found.len()]
 
         for i in 0..<found.len() do out[i] = Shape(self, found[i])
 
@@ -353,7 +353,7 @@ struct World
         c.world_cast_ray(self.id, origin, translation, filter, &collect_cast, ptr_cast(&into))
 
         val n = into.hits.len()
-        var out: []RayHit = [RayHit(Shape(self, ShapeId(0, 0, 0)), zero(), zero(), 0.0); n]
+        val out: []RayHit = [RayHit(Shape(self, ShapeId(0, 0, 0)), zero(), zero(), 0.0); n]
 
         for i in 0..<n
             out[i] = RayHit(Shape(self, into.hits[i]), into.points[i], into.normals[i], into.fractions[i])
@@ -564,9 +564,9 @@ struct Body
     // than handing back a view Box2D could invalidate.
     shapes(self) -> []Shape
         val n = c.body_get_shape_count(self.id)
-        var ids: []ShapeId = [ShapeId(0, 0, 0); usize(n)]
+        val ids: []ShapeId = [ShapeId(0, 0, 0); usize(n)]
         val got = usize(c.body_get_shapes(self.id, as_mut_ptr(ids[..]), n))
-        var out: []Shape = [Shape(self.world, ShapeId(0, 0, 0)); got]
+        val out: []Shape = [Shape(self.world, ShapeId(0, 0, 0)); got]
 
         for i in 0..<got do out[i] = Shape(self.world, ids[i])
 
@@ -682,9 +682,9 @@ struct Shape
     // events enabled, and refreshed by each step.
     sensor_overlaps(self) -> []Shape
         val n = c.shape_get_sensor_capacity(self.id)
-        var ids: []ShapeId = [ShapeId(0, 0, 0); usize(n)]
+        val ids: []ShapeId = [ShapeId(0, 0, 0); usize(n)]
         val got = usize(c.shape_get_sensor_overlaps(self.id, as_mut_ptr(ids[..]), n))
-        var out: []Shape = [Shape(self.world, ShapeId(0, 0, 0)); got]
+        val out: []Shape = [Shape(self.world, ShapeId(0, 0, 0)); got]
 
         for i in 0..<got do out[i] = Shape(self.world, ids[i])
 

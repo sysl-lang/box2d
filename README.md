@@ -62,13 +62,10 @@ check it by handing a value built above to a declaration written below. What is 
 hands one to a caller.
 
 This is what needs sysl **0.0.67**, the release a transparent alias over a struct arrived in.
-Building the five names that are also enum variants needs **0.0.69**, and `package.hocon` states
-that floor.
-
 **Build a shape with `circle`, `capsule`, `segment` or `make_box`** — the lowercase builders in
 `defs.sysl` fill in the defaults and are what every example uses. Naming the struct works too: five
-of the aliased names are also variants of `ShapeKind` or `JointKind`, and which one a site means is
-settled by what it expects, so `Circle(zero(), 0.5)` builds a shape and `ShapeKind.Circle` names the
+of the aliased names are also variants of `ShapeKind` or `JointKind`, and the expected type settles
+which one a site means, so `Circle(zero(), 0.5)` builds a shape and `ShapeKind.Circle` names the
 kind.
 
 ## Three things worth knowing before reading the source

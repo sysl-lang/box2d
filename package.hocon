@@ -16,7 +16,7 @@
 // arrived against `sysl.sum`, and compiles it as more modules.
 //
 //     dependencies {
-//       box2d { git = "github.com/sysl-lang/box2d", version = "0.1.3" }
+//       box2d { git = "github.com/sysl-lang/box2d", version = "0.1.4" }
 //     }
 //
 // The coordinate is identity rather than a URL, so it carries no `https://`, and the version is the
@@ -24,23 +24,20 @@
 
 package {
   name    = "box2d"
-  version = "0.1.3"
+  version = "0.1.4"
 
   // **The oldest compiler this builds with, and it is a released one.** `types.sysl` names Box2D's
   // shapes, ids, defs and events from the pleasant layer with `type Polygon = c.Polygon` — a
   // transparent alias over a struct, which arrived in 0.0.67. An older compiler refuses the file
   // outright, so the floor is here rather than left to a reader to work out from a parse error.
   //
-  // **0.0.69 raised it.** Five of those names are also variants of `ShapeKind` or `JointKind`, and
-  // until that release a call spelling one reached the variant whatever the site expected — so
-  // `defs.sysl`'s builders had to construct through `c` and a caller could not write
-  // `Circle(centre, r)` at all. They build by name now, which 0.0.68 refuses.
+  // Five of those names are also variants of `ShapeKind` or `JointKind`; the expected type decides
+  // which a site means, so a caller writes `Circle(centre, r)` and `defs.sysl` builds by name.
   //
-  // **0.0.96 raised it again, for the scalar on the left.** `2.0 * v` needs an `impl` whose subject
-  // is `f32` and whose trait argument is `Vec2`; coherence used to look only at the subject, so that
-  // block had a home in no module at all and `math.sysl` said so in a comment. It counts the trait's
-  // arguments now, and a block naming `Vec2` belongs where `Vec2` is declared.
-  sysl = "0.0.96"
+  // `2.0 * v` needs an `impl` whose subject is `f32` and whose trait argument is `Vec2`, a block
+  // that belongs where `Vec2` is declared. A `val`-bound slice is writable through, so the
+  // buffers `shapes` and `overlap_aabb` fill are `val`s.
+  sysl = "0.1.0-alpha.8"
 }
 
 // **There is no shim.c, and that is the headline fact about this binding.**
