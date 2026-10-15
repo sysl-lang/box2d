@@ -3,6 +3,8 @@
 2D rigid body physics for [sysl](https://sysl.sh) — bodies, shapes, joints, contacts and queries,
 from [Box2D](https://github.com/erincatto/box2d) v3.1.1.
 
+*An independent sysl package for Box2D. It is not affiliated with or endorsed by Box2D's authors or trademark holders.*
+
 ```sysl
 import sh.sysl.box2d.{world, body_def, shape_def, circle, make_box, BodyKind}
 import sh.sysl.box2d.math.{Vec2, zero}
